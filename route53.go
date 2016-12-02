@@ -2,17 +2,18 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/route53/route53iface"
-	"github.com/golang/glog"
 )
 
 var (
 	errRoute53NoHostedZoneFound = errors.New("could not find a Route53 hosted zone")
 	errRoute53WaitWatchTimedOut = errors.New("timed out waiting for changes to be applied")
+	errRoute53RecordNotInZone   = errors.New("record does not belong to zone")
 
 	defaultRoute53RecordTTL             int64 = 60
 	defaultRoute53ZoneWaitWatchInterval       = 10 * time.Second
@@ -39,7 +40,9 @@ func newRoute53Zone(zoneName string, route53session route53iface.Route53API) (*r
 }
 
 func (z *route53Zone) UpsertCname(recordName string, value string) error {
-	glog.Infof("updating Route53 record '%s'", recordName)
+	if !recordBelongsToZone(recordName, z.Name) {
+		return errRoute53RecordNotInZone
+	}
 
 	resp, err := z.api.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
 		ChangeBatch: &route53.ChangeBatch{
@@ -62,7 +65,6 @@ func (z *route53Zone) UpsertCname(recordName string, value string) error {
 		return err
 	}
 
-	glog.Infof("waiting for Route53 changes to apply ...")
 	return z.waitForChange(*resp.ChangeInfo.Id)
 }
 
@@ -107,8 +109,6 @@ func (z *route53Zone) setZone(name string) error {
 		return errRoute53NoHostedZoneFound
 	}
 
-	glog.Infof("selected Route53 hosted zone '%s'", zones.HostedZones[0].Id)
-
 	zone, err := z.api.GetHostedZone(&route53.GetHostedZoneInput{
 		Id: zones.HostedZones[0].Id,
 	})
@@ -124,4 +124,20 @@ func (z *route53Zone) setZone(name string) error {
 	}
 
 	return nil
+}
+
+func recordBelongsToZone(record string, zone string) bool {
+	zone = strings.Trim(zone, ".")
+	record = strings.Trim(record, ".")
+
+	if record == zone {
+		return false
+	}
+
+	zoneSuffix := "." + zone
+	if !strings.HasSuffix(record, zoneSuffix) {
+		return false
+	}
+
+	return !strings.Contains(strings.TrimSuffix(record, zoneSuffix), ".")
 }
