@@ -1,11 +1,40 @@
-hash: dc29b6c9b51e792a451910ee8da89363390ea54fd5d3fba88a3314a71dd304f2
-updated: 2016-11-30T12:43:53.521985301Z
+hash: 6aefdb5542105c6a06ace2add7d61a85e89fbd3acc9fb4a6a425ee8d25a7b337
+updated: 2016-12-02T10:35:05.42402999Z
 imports:
 - name: cloud.google.com/go
   version: a2e776edd7c5463ed144b91a28640db71619ae3c
   subpackages:
   - compute/metadata
   - internal
+- name: github.com/aws/aws-sdk-go
+  version: 918c42e2bcdb277aa821401c906e88254501bdf4
+  subpackages:
+  - aws
+  - aws/awserr
+  - aws/awsutil
+  - aws/client
+  - aws/client/metadata
+  - aws/corehandlers
+  - aws/credentials
+  - aws/credentials/ec2rolecreds
+  - aws/credentials/endpointcreds
+  - aws/credentials/stscreds
+  - aws/defaults
+  - aws/ec2metadata
+  - aws/request
+  - aws/session
+  - aws/signer/v4
+  - private/endpoints
+  - private/protocol
+  - private/protocol/query
+  - private/protocol/query/queryutil
+  - private/protocol/rest
+  - private/protocol/restxml
+  - private/protocol/xml/xmlutil
+  - private/waiter
+  - service/route53
+  - service/route53/route53iface
+  - service/sts
 - name: github.com/blang/semver
   version: 3a37c301dda64cbe17f16f661b4c976803c0e2d2
 - name: github.com/coreos/go-oidc
@@ -38,6 +67,8 @@ imports:
   - swagger
 - name: github.com/ghodss/yaml
   version: a54de18a07046d8c4b26e9327698a2ebb9285b36
+- name: github.com/go-ini/ini
+  version: 2ba15ac2dc9cdf88c110ec2dc0ced7fa45f5678c
 - name: github.com/go-openapi/jsonpointer
   version: 8d96a2dc61536b690bd36b2e9df0b3c0b62825b2
 - name: github.com/go-openapi/jsonreference
@@ -65,6 +96,8 @@ imports:
   version: f5387c492211eb133053880d23dfae62aa14123d
 - name: github.com/imdario/mergo
   version: 50d4dbd4eb0e84778abe37cefef140271d96fade
+- name: github.com/jmespath/go-jmespath
+  version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
 - name: github.com/jonboulle/clockwork
   version: bcac9884e7502bb2b474c0339d889cb981a2f27f
 - name: github.com/juju/ratelimit

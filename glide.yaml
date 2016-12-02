@@ -10,3 +10,5 @@ import:
   - 1.5/rest
   - 1.5/tools/cache
   - 1.5/tools/clientcmd
+- package: github.com/aws/aws-sdk-go
+  version: v1.5.13
