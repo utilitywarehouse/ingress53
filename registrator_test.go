@@ -44,7 +44,7 @@ var (
 )
 
 func TestNewRegistrator_defaults(t *testing.T) {
-	_, err := newRegistrator("a", "b", "")
+	_, err := newRegistrator("z", "a", "b", "")
 	if err == nil || err.Error() != "unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined" {
 		t.Errorf("newRegistrator did not return expected error")
 	}
@@ -56,13 +56,13 @@ func TestNewRegistrator_defaults(t *testing.T) {
 	}
 
 	// invalid selector
-	_, err = newRegistrator("a", "b", "a^b")
+	_, err = newRegistrator("z", "a", "b", "a^b")
 	if err == nil {
 		t.Errorf("newRegistrator did not return expected error")
 	}
 
 	// working
-	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b"})
+	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneName: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -70,7 +70,7 @@ func TestNewRegistrator_defaults(t *testing.T) {
 
 func TestRegistrator_GetTargetForIngress(t *testing.T) {
 	// empty selector
-	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b"})
+	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneName: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -79,7 +79,7 @@ func TestRegistrator_GetTargetForIngress(t *testing.T) {
 	}
 
 	// proper selector
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", PublicResourceSelector: "public=true"})
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneName: "c", PublicResourceSelector: "public=true"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -111,7 +111,7 @@ type mockEvent struct {
 func TestRegistratorHandler(t *testing.T) {
 	s, _ := labels.Parse("public=true")
 	mdz := &mockDNSZone{zoneData: map[string]string{}}
-	r := &registrator{dnsZone: mdz, publicSelector: s, options: registratorOptions{PrivateHostname: "priv.example.com", PublicHostname: "pub.example.com"}}
+	r := &registrator{dnsZone: mdz, publicSelector: s, options: registratorOptions{PrivateHostname: "priv.example.com", PublicHostname: "pub.example.com", Route53ZoneName: "c"}}
 
 	testCases := []struct {
 		events []mockEvent

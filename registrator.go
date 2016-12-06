@@ -37,19 +37,21 @@ type registratorOptions struct {
 	PrivateHostname        string // required
 	PublicHostname         string // required
 	PublicResourceSelector string
+	Route53ZoneName        string // required
 	ResyncPeriod           time.Duration
 }
 
-func newRegistrator(publicHostname, privateHostname, publicSelector string) (*registrator, error) {
+func newRegistrator(zoneName, publicHostname, privateHostname, publicSelector string) (*registrator, error) {
 	return newRegistratorWithOptions(registratorOptions{
 		PrivateHostname:        privateHostname,
 		PublicHostname:         publicHostname,
 		PublicResourceSelector: publicSelector,
+		Route53ZoneName:        zoneName,
 	})
 }
 
 func newRegistratorWithOptions(options registratorOptions) (*registrator, error) {
-	if options.PrivateHostname == "" || options.PublicHostname == "" {
+	if options.PrivateHostname == "" || options.PublicHostname == "" || options.Route53ZoneName == "" {
 		return nil, errRegistratorMissingOption
 	}
 
@@ -89,7 +91,7 @@ func (r *registrator) Start() error {
 	if err != nil {
 		return err
 	}
-	dns, err := newRoute53Zone("zoneName", route53.New(sess))
+	dns, err := newRoute53Zone(r.options.Route53ZoneName, route53.New(sess))
 	if err != nil {
 		return err
 	}
