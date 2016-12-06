@@ -12,3 +12,4 @@ import:
   - 1.5/tools/clientcmd
 - package: github.com/aws/aws-sdk-go
   version: v1.5.13
+- package: github.com/hashicorp/logutils

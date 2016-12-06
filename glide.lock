@@ -1,5 +1,5 @@
-hash: 6aefdb5542105c6a06ace2add7d61a85e89fbd3acc9fb4a6a425ee8d25a7b337
-updated: 2016-12-02T10:35:05.42402999Z
+hash: 6f9b19f39eca226aa1046fa1ea8235a5548b35b18eb6de384e7b0134a3d34e11
+updated: 2016-12-05T15:55:51.948882548Z
 imports:
 - name: cloud.google.com/go
   version: a2e776edd7c5463ed144b91a28640db71619ae3c
@@ -24,6 +24,7 @@ imports:
   - aws/request
   - aws/session
   - aws/signer/v4
+  - awstesting/mock
   - private/endpoints
   - private/protocol
   - private/protocol/query
@@ -92,6 +93,8 @@ imports:
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
 - name: github.com/googleapis/gax-go
   version: da06d194a00e19ce00d9011a13931c3f6f6887c7
+- name: github.com/hashicorp/logutils
+  version: 0dc08b1671f34c4250ce212759ebd880f743d883
 - name: github.com/howeyc/gopass
   version: f5387c492211eb133053880d23dfae62aa14123d
 - name: github.com/imdario/mergo
