@@ -316,7 +316,7 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			changeRRErr:   tc.changeRRErr,
 		})
 		if err != tc.expectedNewErr {
-			t.Errorf("newRoute53Zone returned unexpected error: %+v", err)
+			t.Fatalf("newRoute53Zone returned unexpected error: %+v", err)
 		}
 
 		if tc.expectedNewErr != nil {
@@ -338,5 +338,23 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 		if err := p.UpsertCname(tc.recordName, tc.recordValue); err != tc.expectedUpsertErr {
 			t.Errorf("Route53Zone.UpsertCname returned unexpected error: %+v", err)
 		}
+	}
+}
+
+func TestRoute53Zone_DeleteCname(t *testing.T) {
+	defer mockRoute53Timers()()
+
+	p, err := newRoute53Zone("example.com.", &mockRoute53API{
+		getZoneResp:   testRoute53ZoneGetZoneOK,
+		getChangeResp: testRoute53ZoneGetChangeOK,
+		listZonesResp: testRoute53ZoneListZonesOK,
+		changeRRResp:  testRoute53ZoneChangeRROK,
+	})
+	if err != nil {
+		t.Fatalf("newRoute53Zone returned unexpected error: %+v", err)
+	}
+
+	if err := p.DeleteCname("test.example.com"); err != nil {
+		t.Errorf("Route53Zone.DeleteCname returned unexpected error: %+v", err)
 	}
 }
