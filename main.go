@@ -17,16 +17,24 @@ var (
 	lbPublicHostname       = flag.String("elb-hostname-public", "", "hostname of the ELB for public ingresses")
 	lbPrivateHostname      = flag.String("elb-hostname-private", "", "hostname of the ELB for private ingresses")
 	r53ZoneName            = flag.String("route53-zone-name", "", "Route53 DNS zone name")
+	debugLogs              = flag.Bool("debug", false, "enables debug logs")
+	dryRun                 = flag.Bool("dry-run", false, "if set, the registrator will not make any Route53 changes")
 )
 
 func init() {
 	flag.Parse()
 
-	log.SetOutput(&logutils.LevelFilter{
+	luf := &logutils.LevelFilter{
 		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "ERROR"},
 		MinLevel: logutils.LogLevel("INFO"),
 		Writer:   os.Stdout,
-	})
+	}
+
+	if *debugLogs {
+		luf.MinLevel = logutils.LogLevel("DEBUG")
+	}
+
+	log.SetOutput(luf)
 }
 
 func main() {

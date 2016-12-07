@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -77,6 +78,8 @@ func (z *route53Zone) changeCname(action string, recordName string, value string
 		return err
 	}
 
+	log.Println("[DEBUG] route53 changes have been submitted, waiting for nameservers to sync")
+
 	return z.waitForChange(*resp.ChangeInfo.Id)
 }
 
@@ -102,6 +105,8 @@ func (z *route53Zone) waitForChange(changeID string) error {
 			if *change.ChangeInfo.Status == route53.ChangeStatusInsync {
 				return nil
 			}
+
+			log.Printf("[DEBUG] route53 changes are still being applied, waiting for %s", defaultRoute53ZoneWaitWatchInterval.String())
 		case <-timeout.C:
 			return errRoute53WaitWatchTimedOut
 		}
@@ -127,6 +132,8 @@ func (z *route53Zone) setZone(name string) error {
 	if err != nil {
 		return err
 	}
+
+	log.Printf("[DEBUG] found matching route53 hosted zone: %s", *zone.HostedZone.Id)
 
 	z.Name = name
 	z.ID = *zone.HostedZone.Id

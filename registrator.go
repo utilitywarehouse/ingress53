@@ -96,14 +96,18 @@ func (r *registrator) Start() error {
 		return err
 	}
 	r.dnsZone = dns
+	log.Printf("[INFO] setup route53 session")
 
 	kubeClient, err := kubernetes.NewForConfig(r.options.KubernetesConfig)
 	if err != nil {
 		return err
 	}
 	r.ingressWatcher = newIngressWatcher(kubeClient, r.handler, r.options.ResyncPeriod)
+	log.Printf("[INFO] setup kubernetes ingress watcher")
 
-	return r.Start()
+	r.ingressWatcher.Start()
+
+	return nil
 }
 
 func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ingress, newIngress *v1beta1.Ingress) {
@@ -112,35 +116,43 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 		hostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
 		log.Printf("[INFO] updating %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
-		for _, h := range hostnames {
-			if err := r.UpsertCname(h, target); err != nil {
-				log.Printf("[ERROR] error while updating CNAME record '%s': %+v", h, err)
+		if !*dryRun {
+			for _, h := range hostnames {
+				if err := r.UpsertCname(h, target); err != nil {
+					log.Printf("[ERROR] error while updating CNAME record '%s': %+v", h, err)
+				}
 			}
 		}
 	case watch.Modified:
 		newHostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
 		log.Printf("[INFO] updating %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, target)
-		for _, h := range newHostnames {
-			if err := r.UpsertCname(h, target); err != nil {
-				log.Printf("[ERROR] error while updating CNAME record '%s': %+v", h, err)
+		if !*dryRun {
+			for _, h := range newHostnames {
+				if err := r.UpsertCname(h, target); err != nil {
+					log.Printf("[ERROR] error while updating CNAME record '%s': %+v", h, err)
+				}
 			}
 		}
 
 		oldHostnames := getHostnamesFromIngress(oldIngress)
 		diffHostnames := diffStringSlices(oldHostnames, newHostnames)
 		log.Printf("[INFO] deleting %d old hostnames for ingress '%s'\n", len(diffHostnames), oldIngress.Name)
-		for _, h := range diffHostnames {
-			if err := r.DeleteCname(h); err != nil {
-				log.Printf("[ERROR] error while deleting CNAME record '%s': %+v", h, err)
+		if !*dryRun {
+			for _, h := range diffHostnames {
+				if err := r.DeleteCname(h); err != nil {
+					log.Printf("[ERROR] error while deleting CNAME record '%s': %+v", h, err)
+				}
 			}
 		}
 	case watch.Deleted:
 		hostnames := getHostnamesFromIngress(oldIngress)
 		log.Printf("[INFO] deleting %d hostnames for ingress '%s'\n", len(hostnames), oldIngress.Name)
-		for _, h := range hostnames {
-			if err := r.DeleteCname(h); err != nil {
-				log.Printf("[ERROR] error while deleting CNAME record '%s': %+v", h, err)
+		if !*dryRun {
+			for _, h := range hostnames {
+				if err := r.DeleteCname(h); err != nil {
+					log.Printf("[ERROR] error while deleting CNAME record '%s': %+v", h, err)
+				}
 			}
 		}
 	}
