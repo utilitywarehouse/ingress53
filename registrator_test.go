@@ -4,43 +4,10 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/client-go/1.5/pkg/api"
-	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/1.5/pkg/labels"
 	"k8s.io/client-go/1.5/pkg/watch"
 	"k8s.io/client-go/1.5/rest"
-)
-
-var (
-	testIngressA = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleA",
-			Namespace: api.NamespaceDefault,
-			Labels:    map[string]string{},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "foo1.example.com"},
-				{Host: "foo2.example.com"},
-			},
-		},
-	}
-
-	testIngressB = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleB",
-			Namespace: api.NamespaceDefault,
-			Labels: map[string]string{
-				"public": "true",
-			},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "bar.example.com"},
-			},
-		},
-	}
 )
 
 func TestNewRegistrator_defaults(t *testing.T) {

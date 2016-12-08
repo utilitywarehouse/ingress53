@@ -48,7 +48,7 @@ func main() {
 	if *kubeConfig != "" {
 		config, err := clientcmd.BuildConfigFromFlags("", *kubeConfig)
 		if err != nil {
-			log.Printf("could not create kubernetes client: %+v", err)
+			log.Printf("[ERROR] could not create kubernetes client: %+v", err)
 			os.Exit(1)
 		}
 		ro.KubernetesConfig = config
@@ -56,7 +56,7 @@ func main() {
 
 	r, err := newRegistratorWithOptions(ro)
 	if err != nil {
-		log.Printf("could not create registrator: %+v", err)
+		log.Printf("[ERROR] could not create registrator: %+v", err)
 		os.Exit(1)
 	}
 
@@ -64,12 +64,12 @@ func main() {
 	signal.Notify(sigChannel, os.Interrupt)
 	go func() {
 		<-sigChannel
-		log.Printf("interrupt singal: shutting down ...")
+		log.Println("[INFO] interrupt singal: shutting down ...")
 		r.Stop()
 	}()
 
 	if err := r.Start(); err != nil {
-		log.Printf("registrator returned an error: %+v", err)
+		log.Printf("[INFO] registrator returned an error: %+v", err)
 		os.Exit(1)
 	}
 }

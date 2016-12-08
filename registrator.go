@@ -96,17 +96,16 @@ func (r *registrator) Start() error {
 		return err
 	}
 	r.dnsZone = dns
-	log.Printf("[INFO] setup route53 session")
+	log.Println("[INFO] setup route53 session")
 
 	kubeClient, err := kubernetes.NewForConfig(r.options.KubernetesConfig)
 	if err != nil {
 		return err
 	}
 	r.ingressWatcher = newIngressWatcher(kubeClient, r.handler, r.options.ResyncPeriod)
-	log.Printf("[INFO] setup kubernetes ingress watcher")
+	log.Println("[INFO] setup kubernetes ingress watcher")
 
 	r.ingressWatcher.Start()
-
 	return nil
 }
 
