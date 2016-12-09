@@ -28,12 +28,12 @@ type route53Zone struct {
 	Nameservers []string
 }
 
-func newRoute53Zone(zoneName string, route53session route53iface.Route53API) (*route53Zone, error) {
+func newRoute53Zone(zoneID string, route53session route53iface.Route53API) (*route53Zone, error) {
 	ret := &route53Zone{
 		api: route53session,
 	}
 
-	if err := ret.setZone(zoneName); err != nil {
+	if err := ret.setZone(zoneID); err != nil {
 		return nil, err
 	}
 
@@ -113,29 +113,15 @@ func (z *route53Zone) waitForChange(changeID string) error {
 	}
 }
 
-func (z *route53Zone) setZone(name string) error {
-	zones, err := z.api.ListHostedZonesByName(&route53.ListHostedZonesByNameInput{
-		DNSName:  aws.String(name),
-		MaxItems: aws.String("1"),
-	})
-	if err != nil {
-		return err
-	}
-
-	if len(zones.HostedZones) == 0 || *zones.HostedZones[0].Name != name {
-		return errRoute53NoHostedZoneFound
-	}
-
+func (z *route53Zone) setZone(id string) error {
 	zone, err := z.api.GetHostedZone(&route53.GetHostedZoneInput{
-		Id: zones.HostedZones[0].Id,
+		Id: aws.String(id),
 	})
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[DEBUG] found matching route53 hosted zone: %s", *zone.HostedZone.Id)
-
-	z.Name = name
+	z.Name = *zone.HostedZone.Name
 	z.ID = *zone.HostedZone.Id
 	z.Nameservers = make([]string, len(zone.DelegationSet.NameServers))
 	for i, ns := range zone.DelegationSet.NameServers {

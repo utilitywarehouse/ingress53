@@ -17,14 +17,8 @@ type mockRoute53API struct {
 	getZoneErr    error
 	getChangeResp *route53.GetChangeOutput
 	getChangeErr  error
-	listZonesResp *route53.ListHostedZonesByNameOutput
-	listZonesErr  error
 	changeRRResp  *route53.ChangeResourceRecordSetsOutput
 	changeRRErr   error
-}
-
-func (m mockRoute53API) ListHostedZonesByName(in *route53.ListHostedZonesByNameInput) (*route53.ListHostedZonesByNameOutput, error) {
-	return m.listZonesResp, m.listZonesErr
 }
 
 func (m mockRoute53API) GetHostedZone(in *route53.GetHostedZoneInput) (*route53.GetHostedZoneOutput, error) {
@@ -52,26 +46,6 @@ func mockRoute53Timers() func() {
 
 var (
 	errTestRoute53ZoneMock = errors.New("test error")
-
-	testRoute53ZoneListZonesOK = &route53.ListHostedZonesByNameOutput{
-		DNSName: aws.String("example.com."),
-		HostedZones: []*route53.HostedZone{
-			&route53.HostedZone{
-				ResourceRecordSetCount: aws.Int64(1),
-				CallerReference:        aws.String(""),
-				Config: &route53.HostedZoneConfig{
-					Comment:     aws.String(""),
-					PrivateZone: aws.Bool(false),
-				},
-				Id:   aws.String("/hostedzone/XXXXXXXXXXXXXX"),
-				Name: aws.String("example.com."),
-			},
-		},
-		NextHostedZoneId: aws.String(""),
-		MaxItems:         aws.String("1"),
-		NextDNSName:      aws.String(""),
-		IsTruncated:      aws.Bool(false),
-	}
 
 	testRoute53ZoneGetZoneOK = &route53.GetHostedZoneOutput{
 		HostedZone: &route53.HostedZone{
@@ -133,10 +107,8 @@ var (
 
 func TestRoute53Zone_UpsertCname(t *testing.T) {
 	testCases := []struct {
-		listZonesErr      error
-		listZonesResponse *route53.ListHostedZonesByNameOutput
-		getZoneErr        error
-		getZoneResponse   *route53.GetHostedZoneOutput
+		getZoneErr      error
+		getZoneResponse *route53.GetHostedZoneOutput
 
 		changeRRErr       error
 		changeRRResponse  *route53.ChangeResourceRecordSetsOutput
@@ -144,45 +116,13 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 		getChangeResponse *route53.GetChangeOutput
 
 		recordName  string
-		zoneName    string
+		zoneID      string
 		recordValue string
 
 		expectedNewErr    error
 		expectedUpsertErr error
 	}{
-		{ // error in list zones
-			errTestRoute53ZoneMock,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			"test.example.com",
-			"example.com.",
-			"cname.example.com",
-			errTestRoute53ZoneMock,
-			nil,
-		},
-		{ // zone not found
-			nil,
-			testRoute53ZoneListZonesOK,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			"",
-			"test.example.com",
-			"cname.example.com",
-			errRoute53NoHostedZoneFound,
-			nil,
-		},
 		{ // error in get zone
-			nil,
-			testRoute53ZoneListZonesOK,
 			errTestRoute53ZoneMock,
 			nil,
 			nil,
@@ -197,8 +137,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 		},
 		{ // error record is apex
 			nil,
-			testRoute53ZoneListZonesOK,
-			nil,
 			testRoute53ZoneGetZoneOK,
 			errTestRoute53ZoneMock,
 			nil,
@@ -211,8 +149,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			errRoute53RecordNotInZone,
 		},
 		{ // error in record zone
-			nil,
-			testRoute53ZoneListZonesOK,
 			nil,
 			testRoute53ZoneGetZoneOK,
 			errTestRoute53ZoneMock,
@@ -227,8 +163,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 		},
 		{ // error record is invalid
 			nil,
-			testRoute53ZoneListZonesOK,
-			nil,
 			testRoute53ZoneGetZoneOK,
 			errTestRoute53ZoneMock,
 			nil,
@@ -241,8 +175,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			errRoute53RecordNotInZone,
 		},
 		{ // error in change request
-			nil,
-			testRoute53ZoneListZonesOK,
 			nil,
 			testRoute53ZoneGetZoneOK,
 			errTestRoute53ZoneMock,
@@ -257,8 +189,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 		},
 		{ // error in get change request
 			nil,
-			testRoute53ZoneListZonesOK,
-			nil,
 			testRoute53ZoneGetZoneOK,
 			nil,
 			testRoute53ZoneChangeRROK,
@@ -272,8 +202,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 		},
 		{ // timeout in get change
 			nil,
-			testRoute53ZoneListZonesOK,
-			nil,
 			testRoute53ZoneGetZoneOK,
 			nil,
 			testRoute53ZoneChangeRROK,
@@ -286,8 +214,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			errRoute53WaitWatchTimedOut,
 		},
 		{ // works end to end
-			nil,
-			testRoute53ZoneListZonesOK,
 			nil,
 			testRoute53ZoneGetZoneOK,
 			nil,
@@ -305,13 +231,11 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 	defer mockRoute53Timers()()
 
 	for _, tc := range testCases {
-		p, err := newRoute53Zone(tc.zoneName, &mockRoute53API{
+		p, err := newRoute53Zone(tc.zoneID, &mockRoute53API{
 			getZoneResp:   tc.getZoneResponse,
 			getZoneErr:    tc.getZoneErr,
 			getChangeResp: tc.getChangeResponse,
 			getChangeErr:  tc.getChangeErr,
-			listZonesResp: tc.listZonesResponse,
-			listZonesErr:  tc.listZonesErr,
 			changeRRResp:  tc.changeRRResponse,
 			changeRRErr:   tc.changeRRErr,
 		})
@@ -347,7 +271,6 @@ func TestRoute53Zone_DeleteCname(t *testing.T) {
 	p, err := newRoute53Zone("example.com.", &mockRoute53API{
 		getZoneResp:   testRoute53ZoneGetZoneOK,
 		getChangeResp: testRoute53ZoneGetChangeOK,
-		listZonesResp: testRoute53ZoneListZonesOK,
 		changeRRResp:  testRoute53ZoneChangeRROK,
 	})
 	if err != nil {

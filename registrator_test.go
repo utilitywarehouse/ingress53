@@ -29,7 +29,7 @@ func TestNewRegistrator_defaults(t *testing.T) {
 	}
 
 	// working
-	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneName: "c"})
+	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -37,7 +37,7 @@ func TestNewRegistrator_defaults(t *testing.T) {
 
 func TestRegistrator_GetTargetForIngress(t *testing.T) {
 	// empty selector
-	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneName: "c"})
+	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -46,7 +46,7 @@ func TestRegistrator_GetTargetForIngress(t *testing.T) {
 	}
 
 	// proper selector
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneName: "c", PublicResourceSelector: "public=true"})
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneID: "c", PublicResourceSelector: "public=true"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -78,7 +78,7 @@ type mockEvent struct {
 func TestRegistratorHandler(t *testing.T) {
 	s, _ := labels.Parse("public=true")
 	mdz := &mockDNSZone{zoneData: map[string]string{}}
-	r := &registrator{dnsZone: mdz, publicSelector: s, options: registratorOptions{PrivateHostname: "priv.example.com", PublicHostname: "pub.example.com", Route53ZoneName: "c"}}
+	r := &registrator{dnsZone: mdz, publicSelector: s, options: registratorOptions{PrivateHostname: "priv.example.com", PublicHostname: "pub.example.com", Route53ZoneID: "c"}}
 
 	testCases := []struct {
 		events []mockEvent

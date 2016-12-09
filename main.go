@@ -16,7 +16,7 @@ var (
 	lbPublicSelectorString = flag.String("kubernetes-public-ingress-selector", "", "selector for ingresses that are handled by the public ELB")
 	lbPublicHostname       = flag.String("elb-hostname-public", "", "hostname of the ELB for public ingresses")
 	lbPrivateHostname      = flag.String("elb-hostname-private", "", "hostname of the ELB for private ingresses")
-	r53ZoneName            = flag.String("route53-zone-name", "", "Route53 DNS zone name")
+	r53ZoneID              = flag.String("route53-zone-id", "", "Route53 hosted DNS zone id")
 	debugLogs              = flag.Bool("debug", false, "enables debug logs")
 	dryRun                 = flag.Bool("dry-run", false, "if set, the registrator will not make any Route53 changes")
 )
@@ -42,7 +42,7 @@ func main() {
 		PrivateHostname:        *lbPrivateHostname,
 		PublicHostname:         *lbPublicHostname,
 		PublicResourceSelector: *lbPublicSelectorString,
-		Route53ZoneName:        *r53ZoneName,
+		Route53ZoneID:          *r53ZoneID,
 	}
 
 	if *kubeConfig != "" {
