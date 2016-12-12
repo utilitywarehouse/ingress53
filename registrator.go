@@ -20,8 +20,13 @@ var (
 )
 
 type dnsZone interface {
-	UpsertCname(recordName string, value string) error
-	DeleteCname(recordName string) error
+	UpsertCnames(records []cnameRecord) error
+	DeleteCnames(records []cnameRecord) error
+}
+
+type cnameRecord struct {
+	Hostname string
+	Target   string
 }
 
 type registrator struct {

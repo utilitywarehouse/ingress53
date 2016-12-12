@@ -40,37 +40,49 @@ func newRoute53Zone(zoneID string, route53session route53iface.Route53API) (*rou
 	return ret, nil
 }
 
-func (z *route53Zone) UpsertCname(recordName string, value string) error {
-	return z.changeCname(route53.ChangeActionUpsert, recordName, value)
+func (z *route53Zone) UpsertCnames(records []cnameRecord) error {
+	return z.changeCnames(route53.ChangeActionUpsert, records)
 }
 
-func (z *route53Zone) DeleteCname(recordName string) error {
-	return z.changeCname(route53.ChangeActionDelete, recordName, "")
+func (z *route53Zone) DeleteCnames(records []cnameRecord) error {
+	return z.changeCnames(route53.ChangeActionDelete, records)
 }
 
-func (z *route53Zone) changeCname(action string, recordName string, value string) error {
-	if !recordBelongsToZone(recordName, z.Name) {
-		return errRoute53RecordNotInZone
+func (z *route53Zone) changeCnames(action string, records []cnameRecord) error {
+	for _, r := range records {
+		if !recordBelongsToZone(r.Hostname, z.Name) {
+			return errRoute53RecordNotInZone
+		}
 	}
 
-	var rr *route53.ResourceRecordSet
+	changes := make([]*route53.Change, len(records))
 	if action == route53.ChangeActionDelete {
-		rr = &route53.ResourceRecordSet{
-			Name: aws.String(recordName),
+		for _, r := range records {
+			changes = append(changes, &route53.Change{
+				Action: aws.String(action),
+				ResourceRecordSet: &route53.ResourceRecordSet{
+					Name: aws.String(r.Hostname),
+				},
+			})
 		}
 	} else {
-		rr = &route53.ResourceRecordSet{
-			Name:            aws.String(recordName),
-			TTL:             aws.Int64(defaultRoute53RecordTTL),
-			Type:            aws.String(route53.RRTypeCname),
-			ResourceRecords: []*route53.ResourceRecord{{Value: aws.String(value)}},
+		for _, r := range records {
+			changes = append(changes, &route53.Change{
+				Action: aws.String(action),
+				ResourceRecordSet: &route53.ResourceRecordSet{
+					Name:            aws.String(r.Hostname),
+					TTL:             aws.Int64(defaultRoute53RecordTTL),
+					Type:            aws.String(route53.RRTypeCname),
+					ResourceRecords: []*route53.ResourceRecord{{Value: aws.String(r.Target)}},
+				},
+			})
 		}
 	}
 
 	resp, err := z.api.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
 		ChangeBatch: &route53.ChangeBatch{
-			Changes: []*route53.Change{{Action: aws.String(action), ResourceRecordSet: rr}},
-			Comment: aws.String("Managed by ingress-route53-registrator"),
+			Changes: changes,
+			Comment: aws.String("updated by ingress53"),
 		},
 		HostedZoneId: aws.String(z.ID),
 	})
