@@ -133,42 +133,6 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			errTestRoute53ZoneMock,
 			nil,
 		},
-		{ // error record is apex
-			nil,
-			testRoute53ZoneGetZoneOK,
-			errTestRoute53ZoneMock,
-			nil,
-			nil,
-			nil,
-			"example.com.",
-			cnameRecord{"example.com", "cname.example.com"},
-			nil,
-			errRoute53RecordNotInZone,
-		},
-		{ // error in record zone
-			nil,
-			testRoute53ZoneGetZoneOK,
-			errTestRoute53ZoneMock,
-			nil,
-			nil,
-			nil,
-			"example.com.",
-			cnameRecord{"test.example.org", "cname.example.com"},
-			nil,
-			errRoute53RecordNotInZone,
-		},
-		{ // error record is invalid
-			nil,
-			testRoute53ZoneGetZoneOK,
-			errTestRoute53ZoneMock,
-			nil,
-			nil,
-			nil,
-			"example.com.",
-			cnameRecord{"wrong.test.example.com", "cname.example.com"},
-			nil,
-			errRoute53RecordNotInZone,
-		},
 		{ // error in change request
 			nil,
 			testRoute53ZoneGetZoneOK,
@@ -270,5 +234,12 @@ func TestRoute53Zone_DeleteCname(t *testing.T) {
 
 	if err := p.DeleteCnames([]cnameRecord{{Hostname: "test.example.com"}}); err != nil {
 		t.Errorf("Route53Zone.DeleteCname returned unexpected error: %+v", err)
+	}
+}
+
+func TestRoute53Zone_Domain(t *testing.T) {
+	z := route53Zone{Name: "test"}
+	if z.Domain() != "test" {
+		t.Errorf("Route53Zone.Domain return unexpected value")
 	}
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -14,7 +13,6 @@ import (
 var (
 	errRoute53NoHostedZoneFound = errors.New("could not find a Route53 hosted zone")
 	errRoute53WaitWatchTimedOut = errors.New("timed out waiting for changes to be applied")
-	errRoute53RecordNotInZone   = errors.New("record does not belong to zone")
 
 	defaultRoute53RecordTTL             int64 = 60
 	defaultRoute53ZoneWaitWatchInterval       = 10 * time.Second
@@ -49,12 +47,6 @@ func (z *route53Zone) DeleteCnames(records []cnameRecord) error {
 }
 
 func (z *route53Zone) changeCnames(action string, records []cnameRecord) error {
-	for _, r := range records {
-		if !recordBelongsToZone(r.Hostname, z.Name) {
-			return errRoute53RecordNotInZone
-		}
-	}
-
 	changes := make([]*route53.Change, len(records))
 	if action == route53.ChangeActionDelete {
 		for _, r := range records {
@@ -143,18 +135,6 @@ func (z *route53Zone) setZone(id string) error {
 	return nil
 }
 
-func recordBelongsToZone(record string, zone string) bool {
-	zone = strings.Trim(zone, ".")
-	record = strings.Trim(record, ".")
-
-	if record == zone {
-		return false
-	}
-
-	zoneSuffix := "." + zone
-	if !strings.HasSuffix(record, zoneSuffix) {
-		return false
-	}
-
-	return !strings.Contains(strings.TrimSuffix(record, zoneSuffix), ".")
+func (z *route53Zone) Domain() string {
+	return z.Name
 }
