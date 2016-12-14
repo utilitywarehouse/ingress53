@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ var (
 type dnsZone interface {
 	UpsertCnames(records []cnameRecord) error
 	DeleteCnames(records []cnameRecord) error
+	Domain() string
 }
 
 type cnameRecord struct {
@@ -211,7 +213,7 @@ func (r *registrator) getQueueBatch() ([]cnameRecord, bool, bool) {
 	} else {
 		r.updateQueue = r.updateQueue[len(ret):]
 	}
-	return ret, isDeleteBatch, len(r.updateQueue) == 0
+	return r.pruneBatch(ret), isDeleteBatch, len(r.updateQueue) == 0
 }
 
 func (r *registrator) processQueue() {
@@ -245,4 +247,32 @@ func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
 		return r.options.PublicHostname
 	}
 	return r.options.PrivateHostname
+}
+
+func (r *registrator) pruneBatch(records []cnameRecord) []cnameRecord {
+	pruned := []cnameRecord{}
+	for _, u := range records {
+		if !r.canHandleRecord(u.Hostname) {
+			log.Printf("[ERROR] cannot handle dns record '%s', will ignore it", u.Hostname)
+		} else {
+			pruned = append(pruned, u)
+		}
+	}
+	return pruned
+}
+
+func (r *registrator) canHandleRecord(record string) bool {
+	zone := strings.Trim(r.Domain(), ".")
+	record = strings.Trim(record, ".")
+
+	if record == zone {
+		return false
+	}
+
+	zoneSuffix := "." + zone
+	if !strings.HasSuffix(record, zoneSuffix) {
+		return false
+	}
+
+	return !strings.Contains(strings.TrimSuffix(record, zoneSuffix), ".")
 }

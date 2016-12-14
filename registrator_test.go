@@ -58,6 +58,7 @@ func TestRegistrator_GetTargetForIngress(t *testing.T) {
 
 type mockDNSZone struct {
 	zoneData map[string]string
+	domain   string
 }
 
 func (m *mockDNSZone) UpsertCnames(records []cnameRecord) error {
@@ -73,6 +74,8 @@ func (m *mockDNSZone) DeleteCnames(records []cnameRecord) error {
 	}
 	return nil
 }
+
+func (m *mockDNSZone) Domain() string { return m.domain }
 
 type mockEvent struct {
 	et  watch.EventType
@@ -95,14 +98,17 @@ func TestRegistratorHandler(t *testing.T) {
 	}
 
 	testCases := []struct {
+		domain string
 		events []mockEvent
 		data   map[string]string
 	}{
 		{
+			"",
 			[]mockEvent{},
 			map[string]string{},
 		},
 		{
+			"example.com.",
 			[]mockEvent{
 				{watch.Added, nil, testIngressA},
 			},
@@ -112,6 +118,7 @@ func TestRegistratorHandler(t *testing.T) {
 			},
 		},
 		{
+			"example.com.",
 			[]mockEvent{
 				{watch.Added, nil, testIngressA},
 				{watch.Deleted, testIngressA, nil},
@@ -119,6 +126,7 @@ func TestRegistratorHandler(t *testing.T) {
 			map[string]string{},
 		},
 		{
+			"example.com.",
 			[]mockEvent{
 				{watch.Added, nil, testIngressA},
 				{watch.Modified, testIngressA, testIngressB},
@@ -128,6 +136,7 @@ func TestRegistratorHandler(t *testing.T) {
 			},
 		},
 		{
+			"example.com.",
 			[]mockEvent{
 				{watch.Added, nil, testIngressA},
 				{watch.Deleted, testIngressA, nil},
@@ -137,9 +146,17 @@ func TestRegistratorHandler(t *testing.T) {
 				"bar.example.com": "pub.example.com",
 			},
 		},
+		{
+			"an.example.com.",
+			[]mockEvent{
+				{watch.Added, nil, testIngressA},
+			},
+			map[string]string{},
+		},
 	}
 
 	for i, test := range testCases {
+		mdz.domain = test.domain
 		mdz.zoneData = map[string]string{}
 		r.updateQueue = []cnameRecord{}
 		for _, e := range test.events {
@@ -148,6 +165,28 @@ func TestRegistratorHandler(t *testing.T) {
 		r.processQueue()
 		if !reflect.DeepEqual(mdz.zoneData, test.data) {
 			t.Errorf("handler produced unexcepted zone data for test case #%02d: %+v", i, mdz.zoneData)
+		}
+	}
+}
+
+func TestRegistrator_canHandleRecord(t *testing.T) {
+	testCases := []struct {
+		record   string
+		expected bool
+	}{
+		{"example.com", false},             // apex
+		{"test.example.org", false},        // different zone
+		{"wrong.test.example.com.", false}, // too deep
+		{"test.example.com", true},
+		{"test.example.com.", true},
+	}
+	defer mockRoute53Timers()()
+	r := registrator{dnsZone: &mockDNSZone{domain: "example.com"}}
+
+	for i, tc := range testCases {
+		v := r.canHandleRecord(tc.record)
+		if v != tc.expected {
+			t.Errorf("newRoute53Zone returned unexpected value for test case #%02d: %v", i, v)
 		}
 	}
 }
