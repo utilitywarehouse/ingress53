@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -17,6 +18,7 @@ import (
 var (
 	errRegistratorMissingOption = errors.New("missing required registrator option")
 	defaultResyncPeriod         = 15 * time.Minute
+	defaultBatchProcessCycle    = 5 * time.Second
 )
 
 type dnsZone interface {
@@ -32,8 +34,10 @@ type cnameRecord struct {
 type registrator struct {
 	dnsZone
 	*ingressWatcher
-	options        registratorOptions
-	publicSelector labels.Selector
+	options          registratorOptions
+	publicSelector   labels.Selector
+	updateQueue      []cnameRecord
+	updateQueueMutex *sync.Mutex
 }
 
 type registratorOptions struct {
@@ -87,8 +91,12 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 		options.ResyncPeriod = defaultResyncPeriod
 	}
 
-	return &registrator{options: options, publicSelector: publicSelector}, nil
-
+	return &registrator{
+		options:          options,
+		publicSelector:   publicSelector,
+		updateQueue:      []cnameRecord{},
+		updateQueueMutex: &sync.Mutex{},
+	}, nil
 }
 
 func (r *registrator) Start() error {
@@ -110,62 +118,124 @@ func (r *registrator) Start() error {
 	r.ingressWatcher = newIngressWatcher(kubeClient, r.handler, r.options.ResyncPeriod)
 	log.Println("[INFO] setup kubernetes ingress watcher")
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tick := time.NewTicker(defaultBatchProcessCycle)
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-tick.C:
+				r.processQueue()
+			case <-r.stopChannel:
+				return
+			}
+		}
+	}()
+
 	r.ingressWatcher.Start()
+
+	wg.Wait()
+
 	return nil
 }
 
 func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ingress, newIngress *v1beta1.Ingress) {
+	log.Printf("[DEBUG] received %s event", eventType)
 	switch eventType {
 	case watch.Added:
 		hostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
 		if len(hostnames) > 0 {
-			log.Printf("[INFO] updating %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
-			if !*dryRun {
-				for _, h := range hostnames {
-					if err := r.UpsertCname(h, target); err != nil {
-						log.Printf("[ERROR] error while updating CNAME record '%s': %+v", h, err)
-					}
-				}
-			}
+			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
+			r.queueUpdates(hostnames, target)
 		}
 	case watch.Modified:
 		newHostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
 		if len(newHostnames) > 0 {
-			log.Printf("[INFO] updating %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, target)
-			if !*dryRun {
-				for _, h := range newHostnames {
-					if err := r.UpsertCname(h, target); err != nil {
-						log.Printf("[ERROR] error while updating CNAME record '%s': %+v", h, err)
-					}
-				}
-			}
+			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, target)
+			r.queueUpdates(newHostnames, target)
 		}
-
 		oldHostnames := getHostnamesFromIngress(oldIngress)
 		diffHostnames := diffStringSlices(oldHostnames, newHostnames)
 		if len(diffHostnames) > 0 {
-			log.Printf("[INFO] deleting %d old hostnames for ingress '%s'\n", len(diffHostnames), oldIngress.Name)
-			if !*dryRun {
-				for _, h := range diffHostnames {
-					if err := r.DeleteCname(h); err != nil {
-						log.Printf("[ERROR] error while deleting CNAME record '%s': %+v", h, err)
-					}
-				}
-			}
+			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(diffHostnames), oldIngress.Name)
+			r.queueUpdates(diffHostnames, "")
 		}
 	case watch.Deleted:
 		hostnames := getHostnamesFromIngress(oldIngress)
 		if len(hostnames) > 0 {
-			log.Printf("[INFO] deleting %d hostnames for ingress '%s'\n", len(hostnames), oldIngress.Name)
-			if !*dryRun {
-				for _, h := range hostnames {
-					if err := r.DeleteCname(h); err != nil {
-						log.Printf("[ERROR] error while deleting CNAME record '%s': %+v", h, err)
+			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(hostnames), oldIngress.Name)
+			r.queueUpdates(hostnames, "")
+		}
+	}
+}
+
+func (r *registrator) queueUpdates(hostnames []string, target string) {
+	r.updateQueueMutex.Lock()
+	defer r.updateQueueMutex.Unlock()
+	for _, h := range hostnames {
+		r.updateQueue = append(r.updateQueue, cnameRecord{h, target})
+	}
+}
+
+func (r *registrator) getQueueBatch() ([]cnameRecord, bool, bool) {
+	r.updateQueueMutex.Lock()
+	defer r.updateQueueMutex.Unlock()
+	if len(r.updateQueue) == 0 {
+		return nil, false, true
+	}
+
+	ret := []cnameRecord{}
+	isDeleteBatch := r.updateQueue[0].Target == ""
+	for _, u := range r.updateQueue {
+		if isDeleteBatch {
+			if u.Target == "" {
+				ret = append(ret, u)
+			} else {
+				break
+			}
+		} else {
+			if u.Target != "" {
+				ret = append(ret, u)
+			} else {
+				break
+			}
+		}
+	}
+	if len(ret) == len(r.updateQueue) {
+		r.updateQueue = []cnameRecord{}
+	} else {
+		r.updateQueue = r.updateQueue[len(ret):]
+	}
+	return ret, isDeleteBatch, len(r.updateQueue) == 0
+}
+
+func (r *registrator) processQueue() {
+	for {
+		records, delete, last := r.getQueueBatch()
+		if len(records) > 0 {
+			if delete {
+				log.Printf("[INFO] deleting %d records", len(records))
+				if !*dryRun {
+					if err := r.DeleteCnames(records); err != nil {
+						log.Printf("[ERROR] error deleting records: %+v", err)
+					}
+				}
+			} else {
+				log.Printf("[INFO] modifying %d records", len(records))
+				if !*dryRun {
+					if err := r.UpsertCnames(records); err != nil {
+						log.Printf("[ERROR] error modifying records: %+v", err)
 					}
 				}
 			}
+		}
+		if last {
+			break
 		}
 	}
 }

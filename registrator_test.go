@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 
 	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
@@ -59,13 +60,17 @@ type mockDNSZone struct {
 	zoneData map[string]string
 }
 
-func (m *mockDNSZone) UpsertCname(recordName string, value string) error {
-	m.zoneData[recordName] = value
+func (m *mockDNSZone) UpsertCnames(records []cnameRecord) error {
+	for _, r := range records {
+		m.zoneData[r.Hostname] = r.Target
+	}
 	return nil
 }
 
-func (m *mockDNSZone) DeleteCname(recordName string) error {
-	delete(m.zoneData, recordName)
+func (m *mockDNSZone) DeleteCnames(records []cnameRecord) error {
+	for _, r := range records {
+		delete(m.zoneData, r.Hostname)
+	}
 	return nil
 }
 
@@ -77,20 +82,29 @@ type mockEvent struct {
 
 func TestRegistratorHandler(t *testing.T) {
 	s, _ := labels.Parse("public=true")
-	mdz := &mockDNSZone{zoneData: map[string]string{}}
-	r := &registrator{dnsZone: mdz, publicSelector: s, options: registratorOptions{PrivateHostname: "priv.example.com", PublicHostname: "pub.example.com", Route53ZoneID: "c"}}
+	mdz := &mockDNSZone{}
+	r := &registrator{
+		dnsZone:          mdz,
+		publicSelector:   s,
+		updateQueueMutex: &sync.Mutex{},
+		options: registratorOptions{
+			PrivateHostname: "priv.example.com",
+			PublicHostname:  "pub.example.com",
+			Route53ZoneID:   "c",
+		},
+	}
 
 	testCases := []struct {
 		events []mockEvent
 		data   map[string]string
 	}{
 		{
+			[]mockEvent{},
+			map[string]string{},
+		},
+		{
 			[]mockEvent{
-				{
-					watch.Added,
-					nil,
-					testIngressA,
-				},
+				{watch.Added, nil, testIngressA},
 			},
 			map[string]string{
 				"foo1.example.com": "priv.example.com",
@@ -99,31 +113,25 @@ func TestRegistratorHandler(t *testing.T) {
 		},
 		{
 			[]mockEvent{
-				{
-					watch.Added,
-					nil,
-					testIngressA,
-				},
-				{
-					watch.Deleted,
-					testIngressA,
-					nil,
-				},
+				{watch.Added, nil, testIngressA},
+				{watch.Deleted, testIngressA, nil},
 			},
 			map[string]string{},
 		},
 		{
 			[]mockEvent{
-				{
-					watch.Added,
-					nil,
-					testIngressA,
-				},
-				{
-					watch.Modified,
-					testIngressA,
-					testIngressB,
-				},
+				{watch.Added, nil, testIngressA},
+				{watch.Modified, testIngressA, testIngressB},
+			},
+			map[string]string{
+				"bar.example.com": "pub.example.com",
+			},
+		},
+		{
+			[]mockEvent{
+				{watch.Added, nil, testIngressA},
+				{watch.Deleted, testIngressA, nil},
+				{watch.Added, nil, testIngressB},
 			},
 			map[string]string{
 				"bar.example.com": "pub.example.com",
@@ -132,13 +140,14 @@ func TestRegistratorHandler(t *testing.T) {
 	}
 
 	for i, test := range testCases {
+		mdz.zoneData = map[string]string{}
+		r.updateQueue = []cnameRecord{}
 		for _, e := range test.events {
 			r.handler(e.et, e.old, e.new)
 		}
-
+		r.processQueue()
 		if !reflect.DeepEqual(mdz.zoneData, test.data) {
 			t.Errorf("handler produced unexcepted zone data for test case #%02d: %+v", i, mdz.zoneData)
 		}
 	}
-
 }
