@@ -2,8 +2,8 @@ package main
 
 import (
 	"reflect"
-	"sync"
 	"testing"
+	"time"
 
 	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/1.5/pkg/labels"
@@ -87,9 +87,12 @@ func TestRegistratorHandler(t *testing.T) {
 	s, _ := labels.Parse("public=true")
 	mdz := &mockDNSZone{}
 	r := &registrator{
-		dnsZone:          mdz,
-		publicSelector:   s,
-		updateQueueMutex: &sync.Mutex{},
+		dnsZone:        mdz,
+		publicSelector: s,
+		updateQueue:    make(chan cnameRecord, 16),
+		ingressWatcher: &ingressWatcher{
+			stopChannel: make(chan struct{}),
+		},
 		options: registratorOptions{
 			PrivateHostname: "priv.example.com",
 			PublicHostname:  "pub.example.com",
@@ -156,13 +159,16 @@ func TestRegistratorHandler(t *testing.T) {
 	}
 
 	for i, test := range testCases {
+		r.ingressWatcher.stopChannel = make(chan struct{})
 		mdz.domain = test.domain
 		mdz.zoneData = map[string]string{}
-		r.updateQueue = []cnameRecord{}
+		r.updateQueue = make(chan cnameRecord, 16)
 		for _, e := range test.events {
 			r.handler(e.et, e.old, e.new)
 		}
-		r.processQueue()
+		go r.processUpdateQueue()
+		time.Sleep(1000 * time.Millisecond) // XXX
+		close(r.stopChannel)
 		if !reflect.DeepEqual(mdz.zoneData, test.data) {
 			t.Errorf("handler produced unexcepted zone data for test case #%02d: %+v", i, mdz.zoneData)
 		}

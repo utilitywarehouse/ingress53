@@ -36,10 +36,9 @@ type cnameRecord struct {
 type registrator struct {
 	dnsZone
 	*ingressWatcher
-	options          registratorOptions
-	publicSelector   labels.Selector
-	updateQueue      []cnameRecord
-	updateQueueMutex *sync.Mutex
+	options        registratorOptions
+	publicSelector labels.Selector
+	updateQueue    chan cnameRecord
 }
 
 type registratorOptions struct {
@@ -94,10 +93,9 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 	}
 
 	return &registrator{
-		options:          options,
-		publicSelector:   publicSelector,
-		updateQueue:      []cnameRecord{},
-		updateQueueMutex: &sync.Mutex{},
+		options:        options,
+		publicSelector: publicSelector,
+		updateQueue:    make(chan cnameRecord, 64),
 	}, nil
 }
 
@@ -124,17 +122,7 @@ func (r *registrator) Start() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		tick := time.NewTicker(defaultBatchProcessCycle)
-		defer tick.Stop()
-
-		for {
-			select {
-			case <-tick.C:
-				r.processQueue()
-			case <-r.stopChannel:
-				return
-			}
-		}
+		r.processUpdateQueue()
 	}()
 
 	r.ingressWatcher.Start()
@@ -177,67 +165,56 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 }
 
 func (r *registrator) queueUpdates(hostnames []string, target string) {
-	r.updateQueueMutex.Lock()
-	defer r.updateQueueMutex.Unlock()
 	for _, h := range hostnames {
-		r.updateQueue = append(r.updateQueue, cnameRecord{h, target})
+		r.updateQueue <- cnameRecord{h, target}
 	}
 }
 
-func (r *registrator) getQueueBatch() ([]cnameRecord, bool, bool) {
-	r.updateQueueMutex.Lock()
-	defer r.updateQueueMutex.Unlock()
-	if len(r.updateQueue) == 0 {
-		return nil, false, true
-	}
-
+func (r *registrator) processUpdateQueue() {
 	ret := []cnameRecord{}
-	isDeleteBatch := r.updateQueue[0].Target == ""
-	for _, u := range r.updateQueue {
-		if isDeleteBatch {
-			if u.Target == "" {
-				ret = append(ret, u)
-			} else {
-				break
+	for {
+		select {
+		case t := <-r.updateQueue:
+			if len(ret) > 0 && ((ret[0].Target == "" && t.Target != "") || (ret[0].Target != "" && t.Target == "")) {
+				r.applyBatch(ret)
+				ret = []cnameRecord{}
 			}
-		} else {
-			if u.Target != "" {
-				ret = append(ret, u)
-			} else {
-				break
+			ret = append(ret, t)
+		case <-r.stopChannel:
+			if len(ret) > 0 {
+				r.applyBatch(ret)
+				ret = []cnameRecord{}
 			}
+			return
+		default:
+			if len(ret) > 0 {
+				r.applyBatch(ret)
+				ret = []cnameRecord{}
+			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
-	if len(ret) == len(r.updateQueue) {
-		r.updateQueue = []cnameRecord{}
-	} else {
-		r.updateQueue = r.updateQueue[len(ret):]
-	}
-	return r.pruneBatch(ret), isDeleteBatch, len(r.updateQueue) == 0
 }
 
-func (r *registrator) processQueue() {
-	for {
-		records, delete, last := r.getQueueBatch()
-		if len(records) > 0 {
-			if delete {
-				log.Printf("[INFO] deleting %d records", len(records))
-				if !*dryRun {
-					if err := r.DeleteCnames(records); err != nil {
-						log.Printf("[ERROR] error deleting records: %+v", err)
-					}
-				}
-			} else {
-				log.Printf("[INFO] modifying %d records", len(records))
-				if !*dryRun {
-					if err := r.UpsertCnames(records); err != nil {
-						log.Printf("[ERROR] error modifying records: %+v", err)
-					}
-				}
+func (r *registrator) applyBatch(records []cnameRecord) {
+	pruned := r.pruneBatch(records)
+	if len(pruned) == 0 {
+		return
+	}
+
+	if pruned[0].Target == "" {
+		log.Printf("[INFO] deleting %d records", len(pruned))
+		if !*dryRun {
+			if err := r.DeleteCnames(pruned); err != nil {
+				log.Printf("[ERROR] error deleting records: %+v", err)
 			}
 		}
-		if last {
-			break
+	} else {
+		log.Printf("[INFO] modifying %d records", len(pruned))
+		if !*dryRun {
+			if err := r.UpsertCnames(pruned); err != nil {
+				log.Printf("[ERROR] error modifying records: %+v", err)
+			}
 		}
 	}
 }
