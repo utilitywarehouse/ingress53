@@ -14,7 +14,7 @@ RUN apk add --no-cache \
   && export GOPATH=/go \
   && cd $GOPATH/src/${IMPORT_PATH} \
   && glide i \
-  && CGO_ENABLED=0 go test -v "$(glide nv)" \
+  && CGO_ENABLED=0 go test -v $(glide nv) \
   && CGO_ENABLED=0 go build -v . \
   && mv "$(basename ${IMPORT_PATH})" / \
   && apk del --no-cache go git glide musl-dev \

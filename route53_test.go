@@ -115,9 +115,8 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 		getChangeErr      error
 		getChangeResponse *route53.GetChangeOutput
 
-		recordName  string
-		zoneID      string
-		recordValue string
+		zoneID string
+		record cnameRecord
 
 		expectedNewErr    error
 		expectedUpsertErr error
@@ -129,50 +128,10 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			nil,
 			nil,
 			nil,
-			"test.example.com",
 			"example.com.",
-			"cname.example.com",
+			cnameRecord{"test.example.com", "cname.example.com"},
 			errTestRoute53ZoneMock,
 			nil,
-		},
-		{ // error record is apex
-			nil,
-			testRoute53ZoneGetZoneOK,
-			errTestRoute53ZoneMock,
-			nil,
-			nil,
-			nil,
-			"example.com",
-			"example.com.",
-			"cname.example.com",
-			nil,
-			errRoute53RecordNotInZone,
-		},
-		{ // error in record zone
-			nil,
-			testRoute53ZoneGetZoneOK,
-			errTestRoute53ZoneMock,
-			nil,
-			nil,
-			nil,
-			"test.example.org",
-			"example.com.",
-			"cname.example.com",
-			nil,
-			errRoute53RecordNotInZone,
-		},
-		{ // error record is invalid
-			nil,
-			testRoute53ZoneGetZoneOK,
-			errTestRoute53ZoneMock,
-			nil,
-			nil,
-			nil,
-			"wrong.test.example.com",
-			"example.com.",
-			"cname.example.com",
-			nil,
-			errRoute53RecordNotInZone,
 		},
 		{ // error in change request
 			nil,
@@ -181,9 +140,8 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			nil,
 			nil,
 			nil,
-			"test.example.com",
 			"example.com.",
-			"cname.example.com",
+			cnameRecord{"test.example.com", "cname.example.com"},
 			nil,
 			errTestRoute53ZoneMock,
 		},
@@ -194,9 +152,8 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			testRoute53ZoneChangeRROK,
 			errTestRoute53ZoneMock,
 			nil,
-			"test.example.com",
 			"example.com.",
-			"cname.example.com",
+			cnameRecord{"test.example.com", "cname.example.com"},
 			nil,
 			errTestRoute53ZoneMock,
 		},
@@ -207,9 +164,8 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			testRoute53ZoneChangeRROK,
 			nil,
 			testRoute53ZoneGetChangePending,
-			"test.example.com",
 			"example.com.",
-			"cname.example.com",
+			cnameRecord{"test.example.com", "cname.example.com"},
 			nil,
 			errRoute53WaitWatchTimedOut,
 		},
@@ -220,9 +176,8 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			testRoute53ZoneChangeRROK,
 			nil,
 			testRoute53ZoneGetChangeOK,
-			"test.example.com",
 			"example.com.",
-			"cname.example.com",
+			cnameRecord{"test.example.com", "cname.example.com"},
 			nil,
 			nil,
 		},
@@ -230,7 +185,7 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 
 	defer mockRoute53Timers()()
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		p, err := newRoute53Zone(tc.zoneID, &mockRoute53API{
 			getZoneResp:   tc.getZoneResponse,
 			getZoneErr:    tc.getZoneErr,
@@ -259,8 +214,8 @@ func TestRoute53Zone_UpsertCname(t *testing.T) {
 			t.Errorf("Route53Zone has unexpected Nameservers: %+v", p.Nameservers)
 		}
 
-		if err := p.UpsertCname(tc.recordName, tc.recordValue); err != tc.expectedUpsertErr {
-			t.Errorf("Route53Zone.UpsertCname returned unexpected error: %+v", err)
+		if err := p.UpsertCnames([]cnameRecord{tc.record}); err != tc.expectedUpsertErr {
+			t.Errorf("Route53Zone.UpsertCname returned unexpected error for case #%02d: %+v", i, err)
 		}
 	}
 }
@@ -277,7 +232,14 @@ func TestRoute53Zone_DeleteCname(t *testing.T) {
 		t.Fatalf("newRoute53Zone returned unexpected error: %+v", err)
 	}
 
-	if err := p.DeleteCname("test.example.com"); err != nil {
+	if err := p.DeleteCnames([]cnameRecord{{Hostname: "test.example.com"}}); err != nil {
 		t.Errorf("Route53Zone.DeleteCname returned unexpected error: %+v", err)
+	}
+}
+
+func TestRoute53Zone_Domain(t *testing.T) {
+	z := route53Zone{Name: "test"}
+	if z.Domain() != "test" {
+		t.Errorf("Route53Zone.Domain return unexpected value")
 	}
 }
