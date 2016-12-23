@@ -1,4 +1,4 @@
-package: github.com/utilitywarehouse/ingress-route53-registrator
+package: github.com/utilitywarehouse/ingress53
 import:
 - package: k8s.io/client-go
   subpackages:
@@ -13,3 +13,8 @@ import:
 - package: github.com/aws/aws-sdk-go
   version: v1.5.13
 - package: github.com/hashicorp/logutils
+- package: github.com/prometheus/client_golang
+  version: v0.8.0
+  subpackages:
+  - prometheus/promhttp
+- package: github.com/utilitywarehouse/go-operational
