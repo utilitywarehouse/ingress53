@@ -39,7 +39,7 @@ var (
 	metricUpdatesReceived = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "ingress53",
-			Subsystem: "route53",
+			Subsystem: "kubernetes",
 			Name:      "updates_received",
 			Help:      "number of route53 updates",
 		},
