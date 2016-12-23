@@ -138,6 +138,7 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 	case watch.Added:
 		hostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
+		metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
 		if len(hostnames) > 0 {
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
 			r.queueUpdates(hostnames, target)
@@ -145,6 +146,7 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 	case watch.Modified:
 		newHostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
+		metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
 		if len(newHostnames) > 0 {
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, target)
 			r.queueUpdates(newHostnames, target)
@@ -157,6 +159,7 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 		}
 	case watch.Deleted:
 		hostnames := getHostnamesFromIngress(oldIngress)
+		metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
 		if len(hostnames) > 0 {
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(hostnames), oldIngress.Name)
 			r.queueUpdates(hostnames, "")
@@ -205,6 +208,9 @@ func (r *registrator) applyBatch(records []cnameRecord) {
 	if pruned[0].Target == "" {
 		log.Printf("[INFO] deleting %d records", len(pruned))
 		if !*dryRun {
+			for _, p := range pruned {
+				metricUpdatesApplied.WithLabelValues(p.Hostname, "delete").Inc()
+			}
 			if err := r.DeleteCnames(pruned); err != nil {
 				log.Printf("[ERROR] error deleting records: %+v", err)
 			}
@@ -212,6 +218,9 @@ func (r *registrator) applyBatch(records []cnameRecord) {
 	} else {
 		log.Printf("[INFO] modifying %d records", len(pruned))
 		if !*dryRun {
+			for _, p := range pruned {
+				metricUpdatesApplied.WithLabelValues(p.Hostname, "upsert").Inc()
+			}
 			if err := r.UpsertCnames(pruned); err != nil {
 				log.Printf("[ERROR] error modifying records: %+v", err)
 			}
