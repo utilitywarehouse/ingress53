@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -140,5 +141,9 @@ func (z *route53Zone) Domain() string {
 }
 
 func (z *route53Zone) ListNameservers() []string {
-	return z.Nameservers
+	ret := make([]string, len(z.Nameservers))
+	for i, ns := range z.Nameservers {
+		ret[i] = fmt.Sprintf("%s:53", ns)
+	}
+	return ret
 }

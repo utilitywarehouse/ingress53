@@ -91,8 +91,14 @@ type mockEvent struct {
 }
 
 func TestRegistratorHandler(t *testing.T) {
+	servers, serverAddresses, err := startMockDNSServerFleet(map[string]string{"baz.example.com.": "pub.example.com."})
+	defer stopMockDNSServerFleet(servers)
+	if err != nil {
+		t.Fatalf("dnstest: unable to run test server: %v", err)
+	}
+
 	s, _ := labels.Parse("public=true")
-	mdz := &mockDNSZone{}
+	mdz := &mockDNSZone{nameservers: serverAddresses}
 	r := &registrator{
 		dnsZone:        mdz,
 		publicSelector: s,
@@ -162,6 +168,15 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, testIngressA},
 			},
 			map[string]string{},
+		},
+		{
+			"example.com.",
+			[]mockEvent{
+				{watch.Added, nil, testIngressC},
+			},
+			map[string]string{
+				"baz.example.com": "priv.example.com",
+			},
 		},
 	}
 

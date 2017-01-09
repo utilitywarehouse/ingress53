@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -244,7 +245,14 @@ func (r *registrator) pruneBatch(records []cnameRecord) []cnameRecord {
 	for _, u := range records {
 		if !r.canHandleRecord(u.Hostname) {
 			log.Printf("[ERROR] cannot handle dns record '%s', will ignore it", u.Hostname)
-		} else {
+			continue
+		}
+
+		t, err := resolveCname(fmt.Sprintf("%s.", strings.Trim(u.Hostname, ".")), r.ListNameservers())
+		if err != nil {
+			log.Printf("[DEBUG] error resolving '%s': %+v, will try to update the record", u.Hostname, err)
+			pruned = append(pruned, u)
+		} else if strings.Trim(t, ".") != u.Target {
 			pruned = append(pruned, u)
 		}
 	}
