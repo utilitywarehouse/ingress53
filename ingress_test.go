@@ -58,6 +58,19 @@ var (
 			},
 		},
 	}
+
+	testIngressC = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "exampleC",
+			Namespace: api.NamespaceDefault,
+			Labels:    map[string]string{},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "baz.example.com"},
+			},
+		},
+	}
 )
 
 func Test_getHostnamesFromIngress(t *testing.T) {

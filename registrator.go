@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/miekg/dns"
 	"k8s.io/client-go/1.5/kubernetes"
 	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/1.5/pkg/labels"
@@ -18,14 +20,17 @@ import (
 
 var (
 	errRegistratorMissingOption = errors.New("missing required registrator option")
+	errDNSEmptyAnswer           = errors.New("DNS nameserver returned an empty answer")
 	defaultResyncPeriod         = 15 * time.Minute
 	defaultBatchProcessCycle    = 5 * time.Second
+	dnsClient                   = &dns.Client{}
 )
 
 type dnsZone interface {
 	UpsertCnames(records []cnameRecord) error
 	DeleteCnames(records []cnameRecord) error
 	Domain() string
+	ListNameservers() []string
 }
 
 type cnameRecord struct {
@@ -240,7 +245,14 @@ func (r *registrator) pruneBatch(records []cnameRecord) []cnameRecord {
 	for _, u := range records {
 		if !r.canHandleRecord(u.Hostname) {
 			log.Printf("[ERROR] cannot handle dns record '%s', will ignore it", u.Hostname)
-		} else {
+			continue
+		}
+
+		t, err := resolveCname(fmt.Sprintf("%s.", strings.Trim(u.Hostname, ".")), r.ListNameservers())
+		if err != nil {
+			log.Printf("[DEBUG] error resolving '%s': %+v, will try to update the record", u.Hostname, err)
+			pruned = append(pruned, u)
+		} else if strings.Trim(t, ".") != u.Target {
 			pruned = append(pruned, u)
 		}
 	}
@@ -261,4 +273,51 @@ func (r *registrator) canHandleRecord(record string) bool {
 	}
 
 	return !strings.Contains(strings.TrimSuffix(record, zoneSuffix), ".")
+}
+
+func resolveCname(name string, nameservers []string) (string, error) {
+	m := dns.Msg{}
+	m.SetQuestion(name, dns.TypeCNAME)
+
+	var retError error
+	var retTarget string
+
+	for _, nameserver := range nameservers {
+		r, _, err := dnsClient.Exchange(&m, nameserver)
+		if err != nil {
+			retError = err
+			continue
+		}
+
+		if len(r.Answer) == 0 {
+			retError = errDNSEmptyAnswer
+			continue
+		}
+
+		retTarget = r.Answer[0].(*dns.CNAME).Target
+		retError = nil
+		break
+	}
+
+	return retTarget, retError
+}
+
+func diffStringSlices(a []string, b []string) []string {
+	ret := []string{}
+
+	for _, va := range a {
+		exists := false
+		for _, vb := range b {
+			if va == vb {
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			ret = append(ret, va)
+		}
+	}
+
+	return ret
 }
