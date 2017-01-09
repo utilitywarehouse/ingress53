@@ -138,3 +138,7 @@ func (z *route53Zone) setZone(id string) error {
 func (z *route53Zone) Domain() string {
 	return z.Name
 }
+
+func (z *route53Zone) ListNameservers() []string {
+	return z.Nameservers
+}

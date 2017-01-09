@@ -18,3 +18,4 @@ import:
   subpackages:
   - prometheus/promhttp
 - package: github.com/utilitywarehouse/go-operational
+- package: github.com/miekg/dns

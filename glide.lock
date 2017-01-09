@@ -1,5 +1,5 @@
-hash: 618e938d3d8deab0e2604d35fcd1a280e5f6e9499dba4a8f416820d0de3c93e7
-updated: 2016-12-22T16:27:42.856275239Z
+hash: c1a470f53c52e151235353a1f200e5ba56167e505c232202543ef1b500c09927
+updated: 2017-01-09T09:36:29.487668562Z
 imports:
 - name: github.com/aws/aws-sdk-go
   version: 918c42e2bcdb277aa821401c906e88254501bdf4
@@ -89,10 +89,6 @@ imports:
   - proto
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
-- name: github.com/gorilla/context
-  version: 14f550f51af52180c2eefed15e5fd18d63c0a64a
-- name: github.com/gorilla/mux
-  version: e444e69cbd2e2e3e0749a2f3c717cec491552bbf
 - name: github.com/hashicorp/logutils
   version: 0dc08b1671f34c4250ce212759ebd880f743d883
 - name: github.com/howeyc/gopass
@@ -115,6 +111,8 @@ imports:
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
+- name: github.com/miekg/dns
+  version: ca336a1f95a6b89be9c250df26c7a41742eb4a6f
 - name: github.com/pborman/uuid
   version: 3d4f2ba23642d3cfd06bd4b54cf03d99d95c0f1b
 - name: github.com/prometheus/client_golang
@@ -146,6 +144,8 @@ imports:
   - codec
 - name: github.com/utilitywarehouse/go-operational
   version: 7c8ffcacc98e33e8449f38b52f8072751811d0cd
+  subpackages:
+  - op
 - name: golang.org/x/crypto
   version: c10c31b5e94b6f7a0283272dc2bb27163dcea24b
   subpackages:

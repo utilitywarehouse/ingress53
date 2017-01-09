@@ -1,9 +1,13 @@
 package main
 
 import (
+	"net"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/miekg/dns"
 
 	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/1.5/pkg/labels"
@@ -57,8 +61,9 @@ func TestRegistrator_GetTargetForIngress(t *testing.T) {
 }
 
 type mockDNSZone struct {
-	zoneData map[string]string
-	domain   string
+	zoneData    map[string]string
+	domain      string
+	nameservers []string
 }
 
 func (m *mockDNSZone) UpsertCnames(records []cnameRecord) error {
@@ -76,6 +81,8 @@ func (m *mockDNSZone) DeleteCnames(records []cnameRecord) error {
 }
 
 func (m *mockDNSZone) Domain() string { return m.domain }
+
+func (m *mockDNSZone) ListNameservers() []string { return m.nameservers }
 
 type mockEvent struct {
 	et  watch.EventType
@@ -194,5 +201,160 @@ func TestRegistrator_canHandleRecord(t *testing.T) {
 		if v != tc.expected {
 			t.Errorf("newRoute53Zone returned unexpected value for test case #%02d: %v", i, v)
 		}
+	}
+}
+
+func setupMockDNSRecord(mux *dns.ServeMux, name string, target string) {
+	mux.HandleFunc(name, func(w dns.ResponseWriter, req *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(req)
+		m.Authoritative = true
+		m.Answer = append(m.Answer, &dns.CNAME{
+			Hdr: dns.RR_Header{
+				Name:   req.Question[0].Name,
+				Rrtype: dns.TypeCNAME,
+				Class:  dns.ClassINET,
+				Ttl:    0,
+			},
+			Target: target,
+		})
+		w.WriteMsg(m)
+	})
+}
+
+func startMockDNSServer(laddr string, records map[string]string) (*dns.Server, string, error) {
+	pc, err := net.ListenPacket("udp", laddr)
+	if err != nil {
+		return nil, "", err
+	}
+
+	mux := dns.NewServeMux()
+	for n, r := range records {
+		setupMockDNSRecord(mux, n, r)
+	}
+
+	server := &dns.Server{
+		PacketConn:   pc,
+		ReadTimeout:  time.Hour,
+		WriteTimeout: time.Hour,
+		Handler:      mux,
+	}
+
+	waitLock := sync.Mutex{}
+	waitLock.Lock()
+	server.NotifyStartedFunc = waitLock.Unlock
+
+	go func() {
+		server.ActivateAndServe()
+		pc.Close()
+	}()
+
+	waitLock.Lock()
+	return server, pc.LocalAddr().String(), nil
+}
+
+func startMockDNSServerFleet(records map[string]string) ([]*dns.Server, []string, error) {
+	servers := []*dns.Server{}
+	serverAddresses := []string{}
+
+	s, addr, err := startMockDNSServer("127.0.0.1:0", records)
+	if err != nil {
+		return nil, nil, err
+	}
+	servers = append(servers, s)
+	serverAddresses = append(serverAddresses, addr)
+
+	s, addr, err = startMockDNSServer("127.0.0.1:0", records)
+	if err != nil {
+		return nil, nil, err
+	}
+	servers = append(servers, s)
+	serverAddresses = append(serverAddresses, addr)
+
+	s, addr, err = startMockDNSServer("127.0.0.1:0", records)
+	if err != nil {
+		return nil, nil, err
+	}
+	servers = append(servers, s)
+	serverAddresses = append(serverAddresses, addr)
+
+	s, addr, err = startMockDNSServer("127.0.0.1:0", records)
+	if err != nil {
+		return nil, nil, err
+	}
+	servers = append(servers, s)
+	serverAddresses = append(serverAddresses, addr)
+
+	return servers, serverAddresses, nil
+}
+
+func startMockSemiBrokenDNSServerFleet(records map[string]string) ([]*dns.Server, []string, error) {
+	servers := []*dns.Server{&dns.Server{}}
+	serverAddresses := []string{"127.0.0.1:10000"}
+
+	s, addr, err := startMockDNSServer("127.0.0.1:0", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	servers = append(servers, s)
+	serverAddresses = append(serverAddresses, addr)
+
+	s, addr, err = startMockDNSServer("127.0.0.1:0", records)
+	if err != nil {
+		return nil, nil, err
+	}
+	servers = append(servers, s)
+	serverAddresses = append(serverAddresses, addr)
+
+	s, addr, err = startMockDNSServer("127.0.0.1:0", records)
+	if err != nil {
+		return nil, nil, err
+	}
+	servers = append(servers, s)
+	serverAddresses = append(serverAddresses, addr)
+
+	return servers, serverAddresses, nil
+}
+
+func stopMockDNSServerFleet(servers []*dns.Server) {
+	for _, s := range servers {
+		s.Shutdown()
+	}
+}
+
+func TestDNSClient_ResolveCname_noServer(t *testing.T) {
+	_, err := resolveCname("example.com.", []string{"127.0.0.1:65111"})
+	if err == nil {
+		t.Fatalf("Client.ResolveA should have returned an error")
+	}
+}
+
+func TestDNSClient_ResolveCname_empty(t *testing.T) {
+	servers, serverAddresses, err := startMockDNSServerFleet(map[string]string{})
+	defer stopMockDNSServerFleet(servers)
+	if err != nil {
+		t.Fatalf("dnstest: unable to run test server: %v", err)
+	}
+
+	_, err = resolveCname("example.com.", serverAddresses)
+	if err != errDNSEmptyAnswer {
+		t.Fatalf("Client.ResolveA should have returned an empty answer error")
+	}
+}
+
+func TestDNSClient_ResolveCname_broken(t *testing.T) {
+	servers, serverAddresses, err := startMockSemiBrokenDNSServerFleet(map[string]string{"example.com.": "target.example.com."})
+	defer stopMockDNSServerFleet(servers)
+	if err != nil {
+		t.Fatalf("dnstest: unable to run test server: %v", err)
+	}
+
+	resp, err := resolveCname("example.com.", serverAddresses)
+	if err != nil {
+		t.Fatalf("Client.ResolveA returned unexpected error: %+v", err)
+	}
+
+	if resp != "target.example.com." {
+		t.Fatalf("Client.ResolveA returned unexpected response")
 	}
 }
