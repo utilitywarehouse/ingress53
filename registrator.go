@@ -256,6 +256,7 @@ func (r *registrator) pruneBatch(records []cnameRecord) []cnameRecord {
 			pruned = append(pruned, u)
 		}
 	}
+	pruned = uniqueRecords(pruned)
 	return pruned
 }
 
@@ -320,4 +321,31 @@ func diffStringSlices(a []string, b []string) []string {
 	}
 
 	return ret
+}
+
+func uniqueRecords(records []cnameRecord) []cnameRecord {
+	uniqueRecords := []cnameRecord{}
+	rejectedRecords := []string{}
+
+RECORDS_OUTER:
+	for i, r1 := range records {
+		for _, rj := range rejectedRecords {
+			if r1.Hostname == rj {
+				continue RECORDS_OUTER
+			}
+		}
+
+		for j, r2 := range records {
+			if i != j && r1.Hostname == r2.Hostname {
+				rejectedRecords = append(rejectedRecords, r1.Hostname)
+				continue RECORDS_OUTER
+			}
+		}
+
+		uniqueRecords = append(uniqueRecords, r1)
+	}
+
+	log.Printf("[INFO] refusing to modify the following records: [%s]: multiple ingress resources claim each one", strings.Join(rejectedRecords, ", "))
+
+	return uniqueRecords
 }
