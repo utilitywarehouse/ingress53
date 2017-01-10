@@ -55,6 +55,7 @@ func (z *route53Zone) changeCnames(action string, records []cnameRecord) error {
 				Action: aws.String(action),
 				ResourceRecordSet: &route53.ResourceRecordSet{
 					Name: aws.String(r.Hostname),
+					Type: aws.String(route53.RRTypeCname),
 				},
 			}
 		}

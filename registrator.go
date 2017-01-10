@@ -349,7 +349,9 @@ RECORDS_OUTER:
 		uniqueRecords = append(uniqueRecords, r1)
 	}
 
-	log.Printf("[INFO] refusing to modify the following records: [%s]: multiple ingress resources claim each one", strings.Join(rejectedRecords, ", "))
+	if len(rejectedRecords) > 0 {
+		log.Printf("[INFO] refusing to modify the following records: [%s]: multiple ingress resources claim each one", strings.Join(rejectedRecords, ", "))
+	}
 
 	return uniqueRecords
 }
