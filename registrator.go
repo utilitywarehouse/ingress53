@@ -216,6 +216,7 @@ func (r *registrator) applyBatch(records []cnameRecord) {
 			if err := r.DeleteCnames(pruned); err != nil {
 				log.Printf("[ERROR] error deleting records: %+v", err)
 			} else {
+				log.Printf("[INFO] records were deleted")
 				for _, p := range pruned {
 					metricUpdatesApplied.WithLabelValues(p.Hostname, "delete").Inc()
 				}
@@ -227,6 +228,7 @@ func (r *registrator) applyBatch(records []cnameRecord) {
 			if err := r.UpsertCnames(pruned); err != nil {
 				log.Printf("[ERROR] error modifying records: %+v", err)
 			} else {
+				log.Printf("[INFO] records were modified")
 				for _, p := range pruned {
 					metricUpdatesApplied.WithLabelValues(p.Hostname, "upsert").Inc()
 				}
