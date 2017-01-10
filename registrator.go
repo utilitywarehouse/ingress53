@@ -213,21 +213,23 @@ func (r *registrator) applyBatch(records []cnameRecord) {
 	if pruned[0].Target == "" {
 		log.Printf("[INFO] deleting %d records", len(pruned))
 		if !*dryRun {
-			for _, p := range pruned {
-				metricUpdatesApplied.WithLabelValues(p.Hostname, "delete").Inc()
-			}
 			if err := r.DeleteCnames(pruned); err != nil {
 				log.Printf("[ERROR] error deleting records: %+v", err)
+			} else {
+				for _, p := range pruned {
+					metricUpdatesApplied.WithLabelValues(p.Hostname, "delete").Inc()
+				}
 			}
 		}
 	} else {
 		log.Printf("[INFO] modifying %d records", len(pruned))
 		if !*dryRun {
-			for _, p := range pruned {
-				metricUpdatesApplied.WithLabelValues(p.Hostname, "upsert").Inc()
-			}
 			if err := r.UpsertCnames(pruned); err != nil {
 				log.Printf("[ERROR] error modifying records: %+v", err)
+			} else {
+				for _, p := range pruned {
+					metricUpdatesApplied.WithLabelValues(p.Hostname, "upsert").Inc()
+				}
 			}
 		}
 	}
