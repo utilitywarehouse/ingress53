@@ -266,11 +266,18 @@ func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRe
 		}
 
 		t, err := resolveCname(fmt.Sprintf("%s.", strings.Trim(u.Hostname, ".")), r.ListNameservers())
-		if err != nil {
-			log.Printf("[DEBUG] error resolving '%s': %+v, will try to update the record", u.Hostname, err)
-			pruned = append(pruned, u)
-		} else if strings.Trim(t, ".") != u.Target {
-			pruned = append(pruned, u)
+		switch action {
+		case route53.ChangeActionDelete:
+			if err != errDNSEmptyAnswer {
+				pruned = append(pruned, u)
+			}
+		case route53.ChangeActionUpsert:
+			if err != nil {
+				log.Printf("[DEBUG] error resolving '%s': %+v, will try to update the record", u.Hostname, err)
+				pruned = append(pruned, u)
+			} else if strings.Trim(t, ".") != u.Target {
+				pruned = append(pruned, u)
+			}
 		}
 	}
 	pruned = uniqueRecords(pruned)
