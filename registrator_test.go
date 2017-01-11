@@ -102,7 +102,7 @@ func TestRegistratorHandler(t *testing.T) {
 	r := &registrator{
 		dnsZone:        mdz,
 		publicSelector: s,
-		updateQueue:    make(chan cnameRecord, 16),
+		updateQueue:    make(chan cnameChange, 16),
 		ingressWatcher: &ingressWatcher{
 			stopChannel: make(chan struct{}),
 		},
@@ -184,7 +184,7 @@ func TestRegistratorHandler(t *testing.T) {
 		r.ingressWatcher.stopChannel = make(chan struct{})
 		mdz.domain = test.domain
 		mdz.zoneData = map[string]string{}
-		r.updateQueue = make(chan cnameRecord, 16)
+		r.updateQueue = make(chan cnameChange, 16)
 		for _, e := range test.events {
 			r.handler(e.et, e.old, e.new)
 		}

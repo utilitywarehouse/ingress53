@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/miekg/dns"
@@ -33,6 +34,11 @@ type dnsZone interface {
 	ListNameservers() []string
 }
 
+type cnameChange struct {
+	Action string
+	Record cnameRecord
+}
+
 type cnameRecord struct {
 	Hostname string
 	Target   string
@@ -43,7 +49,7 @@ type registrator struct {
 	*ingressWatcher
 	options        registratorOptions
 	publicSelector labels.Selector
-	updateQueue    chan cnameRecord
+	updateQueue    chan cnameChange
 }
 
 type registratorOptions struct {
@@ -100,7 +106,7 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 	return &registrator{
 		options:        options,
 		publicSelector: publicSelector,
-		updateQueue:    make(chan cnameRecord, 64),
+		updateQueue:    make(chan cnameChange, 64),
 	}, nil
 }
 
@@ -146,71 +152,78 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 		metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
 		if len(hostnames) > 0 {
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
-			r.queueUpdates(hostnames, target)
+			r.queueUpdates(route53.ChangeActionUpsert, hostnames, target)
 		}
 	case watch.Modified:
 		newHostnames := getHostnamesFromIngress(newIngress)
-		target := r.getTargetForIngress(newIngress)
+		newTarget := r.getTargetForIngress(newIngress)
 		metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
 		if len(newHostnames) > 0 {
-			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, target)
-			r.queueUpdates(newHostnames, target)
+			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, newTarget)
+			r.queueUpdates(route53.ChangeActionUpsert, newHostnames, newTarget)
 		}
 		oldHostnames := getHostnamesFromIngress(oldIngress)
+		oldTarget := r.getTargetForIngress(oldIngress)
 		diffHostnames := diffStringSlices(oldHostnames, newHostnames)
 		if len(diffHostnames) > 0 {
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(diffHostnames), oldIngress.Name)
-			r.queueUpdates(diffHostnames, "")
+			r.queueUpdates(route53.ChangeActionDelete, diffHostnames, oldTarget)
 		}
 	case watch.Deleted:
 		hostnames := getHostnamesFromIngress(oldIngress)
+		target := r.getTargetForIngress(oldIngress)
 		metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
 		if len(hostnames) > 0 {
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(hostnames), oldIngress.Name)
-			r.queueUpdates(hostnames, "")
+			r.queueUpdates(route53.ChangeActionDelete, hostnames, target)
 		}
 	}
 }
 
-func (r *registrator) queueUpdates(hostnames []string, target string) {
+func (r *registrator) queueUpdates(action string, hostnames []string, target string) {
 	for _, h := range hostnames {
-		r.updateQueue <- cnameRecord{h, target}
+		r.updateQueue <- cnameChange{action, cnameRecord{h, target}}
 	}
 }
 
 func (r *registrator) processUpdateQueue() {
-	ret := []cnameRecord{}
+	ret := []cnameChange{}
 	for {
 		select {
 		case t := <-r.updateQueue:
-			if len(ret) > 0 && ((ret[0].Target == "" && t.Target != "") || (ret[0].Target != "" && t.Target == "")) {
+			if len(ret) > 0 && ((ret[0].Action == route53.ChangeActionDelete && t.Action != route53.ChangeActionDelete) || (ret[0].Action != route53.ChangeActionDelete && t.Action == route53.ChangeActionDelete)) {
 				r.applyBatch(ret)
-				ret = []cnameRecord{}
+				ret = []cnameChange{}
 			}
 			ret = append(ret, t)
 		case <-r.stopChannel:
 			if len(ret) > 0 {
 				r.applyBatch(ret)
-				ret = []cnameRecord{}
+				ret = []cnameChange{}
 			}
 			return
 		default:
 			if len(ret) > 0 {
 				r.applyBatch(ret)
-				ret = []cnameRecord{}
+				ret = []cnameChange{}
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
 
-func (r *registrator) applyBatch(records []cnameRecord) {
-	pruned := r.pruneBatch(records)
+func (r *registrator) applyBatch(changes []cnameChange) {
+	action := changes[0].Action
+	records := make([]cnameRecord, len(changes))
+	for i, c := range changes {
+		records[i] = c.Record
+	}
+	pruned := r.pruneBatch(action, records)
 	if len(pruned) == 0 {
 		return
 	}
 
-	if pruned[0].Target == "" {
+	if action == route53.ChangeActionDelete {
 		log.Printf("[INFO] deleting %d records", len(pruned))
 		if !*dryRun {
 			if err := r.DeleteCnames(pruned); err != nil {
@@ -244,11 +257,11 @@ func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
 	return r.options.PrivateHostname
 }
 
-func (r *registrator) pruneBatch(records []cnameRecord) []cnameRecord {
+func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRecord {
 	pruned := []cnameRecord{}
 	for _, u := range records {
 		if !r.canHandleRecord(u.Hostname) {
-			log.Printf("[ERROR] cannot handle dns record '%s', will ignore it", u.Hostname)
+			log.Printf("[INFO] cannot handle dns record '%s', will ignore it", u.Hostname)
 			continue
 		}
 
