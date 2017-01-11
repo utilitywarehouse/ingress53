@@ -232,7 +232,7 @@ func TestRoute53Zone_DeleteCname(t *testing.T) {
 		t.Fatalf("newRoute53Zone returned unexpected error: %+v", err)
 	}
 
-	if err := p.DeleteCnames([]cnameRecord{{Hostname: "test.example.com"}}); err != nil {
+	if err := p.DeleteCnames([]cnameRecord{{Hostname: "test.example.com", Target: "foo.example.com"}}); err != nil {
 		t.Errorf("Route53Zone.DeleteCname returned unexpected error: %+v", err)
 	}
 }
