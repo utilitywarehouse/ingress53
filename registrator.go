@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/miekg/dns"
@@ -223,8 +222,13 @@ func (r *registrator) applyBatch(changes []cnameChange) {
 		return
 	}
 
+	hostnames := make([]string, len(pruned))
+	for i, p := range pruned {
+		hostnames[i] = p.Hostname
+	}
+
 	if action == route53.ChangeActionDelete {
-		log.Printf("[INFO] deleting %d records", len(pruned))
+		log.Printf("[INFO] deleting %d records: %+v", len(pruned), hostnames)
 		if !*dryRun {
 			if err := r.DeleteCnames(pruned); err != nil {
 				log.Printf("[ERROR] error deleting records: %+v", err)
@@ -236,7 +240,7 @@ func (r *registrator) applyBatch(changes []cnameChange) {
 			}
 		}
 	} else {
-		log.Printf("[INFO] modifying %d records", len(pruned))
+		log.Printf("[INFO] modifying %d records: %+v", len(pruned), hostnames)
 		if !*dryRun {
 			if err := r.UpsertCnames(pruned); err != nil {
 				log.Printf("[ERROR] error modifying records: %+v", err)
