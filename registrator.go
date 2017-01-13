@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -291,17 +292,11 @@ func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRe
 func (r *registrator) canHandleRecord(record string) bool {
 	zone := strings.Trim(r.Domain(), ".")
 	record = strings.Trim(record, ".")
-
-	if record == zone {
-		return false
+	matches, err := regexp.MatchString(fmt.Sprintf("^[^.]+\\.%s$", strings.Replace(zone, ".", "\\.", -1)), record)
+	if err != nil {
+		log.Printf("[DEBUG] regexp match error, will not handle record '%s': %+v", record, err)
 	}
-
-	zoneSuffix := "." + zone
-	if !strings.HasSuffix(record, zoneSuffix) {
-		return false
-	}
-
-	return !strings.Contains(strings.TrimSuffix(record, zoneSuffix), ".")
+	return matches
 }
 
 func resolveCname(name string, nameservers []string) (string, error) {
