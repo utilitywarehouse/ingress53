@@ -49,27 +49,15 @@ func (z *route53Zone) DeleteCnames(records []cnameRecord) error {
 
 func (z *route53Zone) changeCnames(action string, records []cnameRecord) error {
 	changes := make([]*route53.Change, len(records))
-	if action == route53.ChangeActionDelete {
-		for i, r := range records {
-			changes[i] = &route53.Change{
-				Action: aws.String(action),
-				ResourceRecordSet: &route53.ResourceRecordSet{
-					Name: aws.String(r.Hostname),
-					Type: aws.String(route53.RRTypeCname),
-				},
-			}
-		}
-	} else {
-		for i, r := range records {
-			changes[i] = &route53.Change{
-				Action: aws.String(action),
-				ResourceRecordSet: &route53.ResourceRecordSet{
-					Name:            aws.String(r.Hostname),
-					TTL:             aws.Int64(defaultRoute53RecordTTL),
-					Type:            aws.String(route53.RRTypeCname),
-					ResourceRecords: []*route53.ResourceRecord{{Value: aws.String(r.Target)}},
-				},
-			}
+	for i, r := range records {
+		changes[i] = &route53.Change{
+			Action: aws.String(action),
+			ResourceRecordSet: &route53.ResourceRecordSet{
+				Name:            aws.String(r.Hostname),
+				TTL:             aws.Int64(defaultRoute53RecordTTL),
+				Type:            aws.String(route53.RRTypeCname),
+				ResourceRecords: []*route53.ResourceRecord{{Value: aws.String(r.Target)}},
+			},
 		}
 	}
 

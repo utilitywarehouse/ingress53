@@ -59,11 +59,39 @@ var (
 		},
 	}
 
-	testIngressC = &v1beta1.Ingress{
+	testIngressC1 = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleC",
+			Name:      "exampleC1",
 			Namespace: api.NamespaceDefault,
 			Labels:    map[string]string{},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "baz.example.com"},
+			},
+		},
+	}
+
+	testIngressC2 = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "exampleC2",
+			Namespace: api.NamespaceDefault,
+			Labels:    map[string]string{},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "baz.example.com"},
+			},
+		},
+	}
+
+	testIngressC3 = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "exampleC3",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				"public": "true",
+			},
 		},
 		Spec: v1beta1.IngressSpec{
 			Rules: []v1beta1.IngressRule{
