@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -84,6 +85,54 @@ func (m *mockDNSZone) Domain() string { return m.domain }
 
 func (m *mockDNSZone) ListNameservers() []string { return m.nameservers }
 
+func (m *mockDNSZone) startMockDNSServer() (*dns.Server, error) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+
+	mux := dns.NewServeMux()
+	mux.HandleFunc(".", func(w dns.ResponseWriter, req *dns.Msg) {
+		msg := new(dns.Msg)
+		msg.SetReply(req)
+		msg.Authoritative = true
+		if target, ok := m.zoneData[strings.Trim(req.Question[0].Name, ".")]; ok {
+			msg.Answer = append(msg.Answer, &dns.CNAME{
+				Hdr: dns.RR_Header{
+					Name:   req.Question[0].Name,
+					Rrtype: dns.TypeCNAME,
+					Class:  dns.ClassINET,
+					Ttl:    0,
+				},
+				Target: target,
+			})
+		}
+		w.WriteMsg(msg)
+	})
+
+	server := &dns.Server{
+		PacketConn:   pc,
+		ReadTimeout:  time.Hour,
+		WriteTimeout: time.Hour,
+		Handler:      mux,
+	}
+
+	waitLock := sync.Mutex{}
+	waitLock.Lock()
+	server.NotifyStartedFunc = waitLock.Unlock
+
+	go func() {
+		server.ActivateAndServe()
+		pc.Close()
+	}()
+
+	waitLock.Lock()
+
+	m.nameservers = []string{pc.LocalAddr().String()}
+
+	return server, nil
+}
+
 type mockEvent struct {
 	et  watch.EventType
 	old *v1beta1.Ingress
@@ -91,14 +140,14 @@ type mockEvent struct {
 }
 
 func TestRegistratorHandler(t *testing.T) {
-	servers, serverAddresses, err := startMockDNSServerFleet(map[string]string{"baz.example.com.": "pub.example.com."})
-	defer stopMockDNSServerFleet(servers)
+	s, _ := labels.Parse("public=true")
+	mdz := &mockDNSZone{}
+	server, err := mdz.startMockDNSServer()
+	defer server.Shutdown()
 	if err != nil {
 		t.Fatalf("dnstest: unable to run test server: %v", err)
 	}
 
-	s, _ := labels.Parse("public=true")
-	mdz := &mockDNSZone{nameservers: serverAddresses}
 	r := &registrator{
 		dnsZone:        mdz,
 		publicSelector: s,
@@ -188,9 +237,15 @@ func TestRegistratorHandler(t *testing.T) {
 		for _, e := range test.events {
 			r.handler(e.et, e.old, e.new)
 		}
-		go r.processUpdateQueue()
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.processUpdateQueue()
+		}()
 		time.Sleep(1000 * time.Millisecond) // XXX
 		close(r.stopChannel)
+		wg.Wait()
 		if !reflect.DeepEqual(mdz.zoneData, test.data) {
 			t.Errorf("handler produced unexcepted zone data for test case #%02d: %+v", i, mdz.zoneData)
 		}
