@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 	"strings"
@@ -104,7 +105,7 @@ func (m *mockDNSZone) startMockDNSServer() (*dns.Server, error) {
 					Class:  dns.ClassINET,
 					Ttl:    0,
 				},
-				Target: target,
+				Target: fmt.Sprintf("%s.", target),
 			})
 		}
 		w.WriteMsg(msg)
@@ -221,10 +222,29 @@ func TestRegistratorHandler(t *testing.T) {
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressC},
+				{watch.Added, nil, testIngressC1},
 			},
 			map[string]string{
 				"baz.example.com": "priv.example.com",
+			},
+		},
+		{
+			"example.com.",
+			[]mockEvent{
+				{watch.Added, nil, testIngressC1},
+				{watch.Added, nil, testIngressC2},
+			},
+			map[string]string{},
+		},
+		{
+			"example.com.",
+			[]mockEvent{
+				{watch.Added, nil, testIngressC1},
+				{watch.Deleted, testIngressA, nil},
+				{watch.Modified, testIngressC1, testIngressC3},
+			},
+			map[string]string{
+				"baz.example.com": "pub.example.com",
 			},
 		},
 	}
