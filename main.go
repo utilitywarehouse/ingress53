@@ -45,6 +45,15 @@ var (
 		},
 		[]string{"ingress", "action"},
 	)
+
+	metricUpdatesRejected = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "ingress53",
+			Subsystem: "kubernetes",
+			Name:      "updates_rejected",
+			Help:      "number of route53 updates rejected",
+		},
+	)
 )
 
 func init() {
@@ -64,6 +73,7 @@ func init() {
 
 	prometheus.MustRegister(metricUpdatesApplied)
 	prometheus.MustRegister(metricUpdatesReceived)
+	prometheus.MustRegister(metricUpdatesRejected)
 }
 
 func main() {

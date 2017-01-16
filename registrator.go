@@ -266,6 +266,7 @@ func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRe
 	pruned := []cnameRecord{}
 	for _, u := range records {
 		if !r.canHandleRecord(u.Hostname) {
+			metricUpdatesRejected.Inc()
 			log.Printf("[INFO] cannot handle dns record '%s', will ignore it", u.Hostname)
 			continue
 		}
@@ -274,6 +275,7 @@ func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRe
 		switch action {
 		case route53.ChangeActionDelete:
 			if err != errDNSEmptyAnswer {
+				log.Printf("[DEBUG] error resolving '%s': %+v, will try to update the record", u.Hostname, err)
 				pruned = append(pruned, u)
 			}
 		case route53.ChangeActionUpsert:
@@ -369,6 +371,7 @@ RECORDS_OUTER:
 	}
 
 	if len(rejectedRecords) > 0 {
+		metricUpdatesRejected.Add(float64(len(rejectedRecords)))
 		log.Printf("[INFO] refusing to modify the following records: [%s]: multiple ingress resources claim each one", strings.Join(rejectedRecords, ", "))
 	}
 
