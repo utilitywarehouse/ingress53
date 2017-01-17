@@ -234,6 +234,16 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, testIngressC1},
 				{watch.Added, nil, testIngressC2},
 			},
+			map[string]string{
+				"baz.example.com": "priv.example.com",
+			},
+		},
+		{
+			"example.com.",
+			[]mockEvent{
+				{watch.Added, nil, testIngressC1},
+				{watch.Added, nil, testIngressC3},
+			},
 			map[string]string{},
 		},
 		{

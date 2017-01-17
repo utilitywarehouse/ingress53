@@ -352,28 +352,56 @@ func uniqueRecords(records []cnameRecord) []cnameRecord {
 	uniqueRecords := []cnameRecord{}
 	rejectedRecords := []string{}
 
-RECORDS_OUTER:
 	for i, r1 := range records {
-		for _, rj := range rejectedRecords {
-			if r1.Hostname == rj {
-				continue RECORDS_OUTER
-			}
+		if stringInSlice(r1.Hostname, rejectedRecords) || recordHostnameInSlice(r1.Hostname, uniqueRecords) {
+			continue
 		}
 
+		duplicates := []cnameRecord{}
 		for j, r2 := range records {
 			if i != j && r1.Hostname == r2.Hostname {
-				rejectedRecords = append(rejectedRecords, r1.Hostname)
-				continue RECORDS_OUTER
+				duplicates = append(duplicates, r2)
 			}
 		}
 
-		uniqueRecords = append(uniqueRecords, r1)
+		if recordTargetsAllMatch(r1.Target, duplicates) {
+			uniqueRecords = append(uniqueRecords, r1)
+		} else {
+			rejectedRecords = append(rejectedRecords, r1.Hostname)
+		}
 	}
 
 	if len(rejectedRecords) > 0 {
 		metricUpdatesRejected.Add(float64(len(rejectedRecords)))
-		log.Printf("[INFO] refusing to modify the following records: [%s]: multiple ingress resources claim each one", strings.Join(rejectedRecords, ", "))
+		log.Printf("[INFO] refusing to modify the following records: [%s]: claimed by multiple ingress pointing to different controllers", strings.Join(rejectedRecords, ", "))
 	}
 
 	return uniqueRecords
+}
+
+func stringInSlice(s string, slice []string) bool {
+	for _, x := range slice {
+		if s == x {
+			return true
+		}
+	}
+	return false
+}
+
+func recordHostnameInSlice(h string, records []cnameRecord) bool {
+	for _, x := range records {
+		if h == x.Hostname {
+			return true
+		}
+	}
+	return false
+}
+
+func recordTargetsAllMatch(target string, records []cnameRecord) bool {
+	for _, r := range records {
+		if target != r.Target {
+			return false
+		}
+	}
+	return true
 }
