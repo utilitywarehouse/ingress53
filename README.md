@@ -15,15 +15,16 @@ You can test it locally (please refer to the command line help for more options)
     -dry-run
 ```
 
-You can use the generated docker image (utilitywarehouse/ingress53) to deploy it on your kubernetes cluster.
+You can use the generated docker image ([utilitywarehouse/ingress53](https://hub.docker.com/r/utilitywarehouse/ingress53/)) to deploy it on your kubernetes cluster.
 
 ## Building
 
-If you need to build manually, you will need to install [glide](https://glide.sh/).
+If you need to build manually:
 
 ```
 $ git clone git@github.com:utilitywarehouse/ingress53.git
 $ cd ingress53
-$ glide i
 $ go build .
 ```
+
+The project uses [glide](https://glide.sh/) to manage dependencies but at the same time, they are vendored for simplicity.
