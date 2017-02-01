@@ -23,7 +23,6 @@ var (
 	lbPublicHostname       = flag.String("elb-hostname-public", "", "hostname of the ELB for public ingresses")
 	lbPrivateHostname      = flag.String("elb-hostname-private", "", "hostname of the ELB for private ingresses")
 	r53ZoneID              = flag.String("route53-zone-id", "", "Route53 hosted DNS zone id")
-	domainPrefix           = flag.String("domain-prefix", "", "Domain prefix for seperating different clusters in the same environment")
 	debugLogs              = flag.Bool("debug", false, "enables debug logs")
 	dryRun                 = flag.Bool("dry-run", false, "if set, the registrator will not make any Route53 changes")
 
@@ -83,7 +82,6 @@ func main() {
 		PublicHostname:         *lbPublicHostname,
 		PublicResourceSelector: *lbPublicSelectorString,
 		Route53ZoneID:          *r53ZoneID,
-		DomainPrefix:           *domainPrefix,
 	}
 
 	if *kubeConfig != "" {
