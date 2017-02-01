@@ -18,13 +18,13 @@ import (
 var (
 	appGitHash = "master"
 
-	kubeConfig             = flag.String("kubernetes-config", "", "path to the kubeconfig file, if unspecified then in-cluster config will be used")
-	lbPublicSelectorString = flag.String("kubernetes-public-ingress-selector", "", "selector for ingresses that are handled by the public ELB")
-	lbPublicHostname       = flag.String("elb-hostname-public", "", "hostname of the ELB for public ingresses")
-	lbPrivateHostname      = flag.String("elb-hostname-private", "", "hostname of the ELB for private ingresses")
-	r53ZoneID              = flag.String("route53-zone-id", "", "Route53 hosted DNS zone id")
-	debugLogs              = flag.Bool("debug", false, "enables debug logs")
-	dryRun                 = flag.Bool("dry-run", false, "if set, the registrator will not make any Route53 changes")
+	kubeConfig           = flag.String("kubernetes-config", "", "path to the kubeconfig file, if unspecified then in-cluster config will be used")
+	publicSelectorString = flag.String("public-ingress-selector", "", "selector for ingresses that should point to the public target")
+	targetPublic         = flag.String("target-public", "", "target hostname for public ingresses")
+	targetPrivate        = flag.String("target-private", "", "target hostnam for private ingresses")
+	r53ZoneID            = flag.String("route53-zone-id", "", "route53 hosted DNS zone id")
+	debugLogs            = flag.Bool("debug", false, "enables debug logs")
+	dryRun               = flag.Bool("dry-run", false, "if set, ingress53 will not make any Route53 changes")
 
 	metricUpdatesApplied = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -78,9 +78,9 @@ func init() {
 
 func main() {
 	ro := registratorOptions{
-		PrivateHostname:        *lbPrivateHostname,
-		PublicHostname:         *lbPublicHostname,
-		PublicResourceSelector: *lbPublicSelectorString,
+		PrivateHostname:        *targetPrivate,
+		PublicHostname:         *targetPublic,
+		PublicResourceSelector: *publicSelectorString,
 		Route53ZoneID:          *r53ZoneID,
 	}
 

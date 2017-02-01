@@ -1,14 +1,30 @@
 # ingress53
 
-# Building
+ingress53 is a service designed to run in kubernetes and maintain DNS records for its ingress resources on AWS Route53.
 
-If you need to build manually, you will need to install [glide](https://glide.sh/).
+# Usage
+ingress53 is slightly opinionated in that it assumes there are two kinds of ingresses: public and private. A kubernetes selector is used to select public ingresses, while all others default to being private.
+
+You can test it locally (please refer to the command line help for more options):
+```sh
+./ingress53 \
+    -route53-zone-id=XXXXXXXXXXXXXX \
+    -target-private=private.example.com \
+    -target-public=public.example.com \
+    -kubernetes-config=$HOME/.kube/config \
+    -dry-run
+```
+
+You can use the generated docker image ([utilitywarehouse/ingress53](https://hub.docker.com/r/utilitywarehouse/ingress53/)) to deploy it on your kubernetes cluster.
+
+## Building
+
+If you need to build manually:
 
 ```
 $ git clone git@github.com:utilitywarehouse/ingress53.git
 $ cd ingress53
-$ glide i
 $ go build .
 ```
 
-Alternatively, you can build the docker image and use the binary in a container.
+The project uses [glide](https://glide.sh/) to manage dependencies but at the same time, they are vendored for simplicity.
