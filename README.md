@@ -2,7 +2,7 @@
 
 ingress53 is a service designed to run in kubernetes and maintain DNS records for the cluster's ingress resources in AWS Route53.
 
-It will watch the kubernetes API (using the service token) for any Ingress resource changes and try to apply those records to route53 in Amazon mapping the record to the "target name", which is the dns name of the ingress endpoint for your cluster.
+It will watch the kubernetes API (using the service token) for any Ingress resource changes and try to apply those records to route53 in Amazon, mapping the record to the "target name", which is the dns name of the ingress endpoint for your cluster.
 
 # Requirements
 
@@ -10,7 +10,7 @@ You need to export the following env variables to be able to use AWS APIs:
 
 ```sh
 export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-exoprt AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ```
 
 # Usage
@@ -106,8 +106,6 @@ spec:
           - -target-private=private.example.com
           - -target-public=public.example.com
           - -public-ingress-selector=ingress-tag-name:ingress-tag-value
-          - -debug
-          - -v=10
         resources:
           requests:
             cpu: 10m
