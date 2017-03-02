@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -22,6 +23,7 @@ import (
 var (
 	errRegistratorMissingOption = errors.New("missing required registrator option")
 	errDNSEmptyAnswer           = errors.New("DNS nameserver returned an empty answer")
+	errInvalidTarget            = errors.New("Target specified with invalid format, should be: \"private:private-aws-elb.com\"")
 	defaultResyncPeriod         = 15 * time.Minute
 	defaultBatchProcessCycle    = 5 * time.Second
 	dnsClient                   = &dns.Client{}
@@ -47,44 +49,55 @@ type cnameRecord struct {
 type registrator struct {
 	dnsZone
 	*ingressWatcher
-	options        registratorOptions
-	publicSelector labels.Selector
-	updateQueue    chan cnameChange
+	options     registratorOptions
+	sats        []selectorAndTarget
+	updateQueue chan cnameChange
 }
 
 type registratorOptions struct {
-	AWSSessionOptions      *session.Options
-	KubernetesConfig       *rest.Config
-	PrivateHostname        string // required
-	PublicHostname         string // required
-	PublicResourceSelector string
-	Route53ZoneID          string // required
-	ResyncPeriod           time.Duration
+	AWSSessionOptions *session.Options
+	KubernetesConfig  *rest.Config
+	Targets           []string // required
+	LabelName         string   // required
+	DefaultTarget     string   // required
+	Route53ZoneID     string   // required
+	ResyncPeriod      time.Duration
 }
 
-func newRegistrator(zoneID, publicHostname, privateHostname, publicSelector string) (*registrator, error) {
-	return newRegistratorWithOptions(registratorOptions{
-		PrivateHostname:        privateHostname,
-		PublicHostname:         publicHostname,
-		PublicResourceSelector: publicSelector,
-		Route53ZoneID:          zoneID,
-	})
+type selectorAndTarget struct {
+	Selector labels.Selector
+	Target   string
+}
+
+func newRegistrator(zoneID string, targets []string, labelName, defaultTarget string) (*registrator, error) {
+	return newRegistratorWithOptions(
+		registratorOptions{
+			Route53ZoneID: zoneID,
+			Targets:       targets,
+			LabelName:     labelName,
+			DefaultTarget: defaultTarget,
+		})
 }
 
 func newRegistratorWithOptions(options registratorOptions) (*registrator, error) {
-	if options.PrivateHostname == "" || options.PublicHostname == "" || options.Route53ZoneID == "" {
+	// check required options are set
+	if len(options.Targets) == 0 || options.Route53ZoneID == "" || options.LabelName == "" {
 		return nil, errRegistratorMissingOption
 	}
 
-	var publicSelector labels.Selector
-	if options.PublicResourceSelector == "" {
-		publicSelector = labels.Nothing()
-	} else {
-		s, err := labels.Parse(options.PublicResourceSelector)
+	var sats []selectorAndTarget
+
+	for _, target := range options.Targets {
+		var sb bytes.Buffer
+		sb.WriteString(options.LabelName)
+		sb.WriteString("=")
+		sb.WriteString(target)
+
+		s, err := labels.Parse(sb.String())
 		if err != nil {
 			return nil, err
 		}
-		publicSelector = s
+		sats = append(sats, selectorAndTarget{Selector: s, Target: target})
 	}
 
 	if options.AWSSessionOptions == nil {
@@ -104,9 +117,9 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 	}
 
 	return &registrator{
-		options:        options,
-		publicSelector: publicSelector,
-		updateQueue:    make(chan cnameChange, 64),
+		options:     options,
+		sats:        sats,
+		updateQueue: make(chan cnameChange, 64),
 	}, nil
 }
 
@@ -256,10 +269,12 @@ func (r *registrator) applyBatch(changes []cnameChange) {
 }
 
 func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
-	if r.publicSelector.Matches(labels.Set(ingress.Labels)) {
-		return r.options.PublicHostname
+	for _, sat := range r.sats {
+		if sat.Selector.Matches(labels.Set(ingress.Labels)) {
+			return sat.Target
+		}
 	}
-	return r.options.PrivateHostname
+	return r.options.DefaultTarget
 }
 
 func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRecord {

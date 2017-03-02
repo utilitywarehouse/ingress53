@@ -15,87 +15,106 @@ import (
 )
 
 var (
-	testIngressA = &v1beta1.Ingress{
+	privateIngressHostsAB = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleA",
+			Name:      "privateIngressHostsAB",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				LabelName: PrivateTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "a.example.com"},
+				{Host: "b.example.com"},
+			},
+		},
+	}
+
+	publicIngressHostC = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "publicIngressHostCD",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				LabelName: PublicTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "c.example.com"},
+			},
+		},
+	}
+
+	publicIngressHostD = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "publicIngressHostCD",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				LabelName: PublicTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "d.example.com"},
+			},
+		},
+	}
+
+	privateIngressHostE = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "ingressHostE",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				LabelName: PrivateTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "e.example.com"},
+			},
+		},
+	}
+
+	privateIngressHostEDup = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "ingressHostE",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				LabelName: PrivateTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "e.example.com"},
+			},
+		},
+	}
+
+	publicIngressHostEDup = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "ingressHostE",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				LabelName: PublicTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "e.example.com"},
+			},
+		},
+	}
+
+	ingressNoLabels = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "ingressNoLabels",
 			Namespace: api.NamespaceDefault,
 			Labels:    map[string]string{},
 		},
 		Spec: v1beta1.IngressSpec{
 			Rules: []v1beta1.IngressRule{
-				{Host: "foo1.example.com"},
-				{Host: "foo2.example.com"},
-			},
-		},
-	}
-
-	testIngressB = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleB",
-			Namespace: api.NamespaceDefault,
-			Labels: map[string]string{
-				"public": "true",
-			},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "bar.example.com"},
-			},
-		},
-	}
-
-	testIngressB2 = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleB",
-			Namespace: api.NamespaceDefault,
-			Labels: map[string]string{
-				"public": "true",
-			},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "bar2.example.com"},
-			},
-		},
-	}
-
-	testIngressC1 = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleC1",
-			Namespace: api.NamespaceDefault,
-			Labels:    map[string]string{},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "baz.example.com"},
-			},
-		},
-	}
-
-	testIngressC2 = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleC2",
-			Namespace: api.NamespaceDefault,
-			Labels:    map[string]string{},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "baz.example.com"},
-			},
-		},
-	}
-
-	testIngressC3 = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "exampleC3",
-			Namespace: api.NamespaceDefault,
-			Labels: map[string]string{
-				"public": "true",
-			},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "baz.example.com"},
+				{Host: "no-labels.example.com"},
 			},
 		},
 	}
@@ -180,13 +199,13 @@ func waitForTrue(test func() bool, timeout time.Duration) error {
 
 func TestIngressWatcher(t *testing.T) {
 	expected := []testIngressEvent{
-		{watch.Added, nil, testIngressA},
-		{watch.Added, nil, testIngressB},
-		{watch.Deleted, testIngressA, nil},
-		{watch.Modified, testIngressB, testIngressB2},
+		{watch.Added, nil, privateIngressHostsAB},
+		{watch.Added, nil, publicIngressHostC},
+		{watch.Deleted, privateIngressHostsAB, nil},
+		{watch.Modified, publicIngressHostC, publicIngressHostD},
 	}
 
-	client, watcher := newTestIngressWatcherClient(*testIngressA, *testIngressB)
+	client, watcher := newTestIngressWatcherClient(*privateIngressHostsAB, *publicIngressHostC)
 
 	pM := &sync.Mutex{}
 	processed := []testIngressEvent{}
@@ -219,11 +238,11 @@ func TestIngressWatcher(t *testing.T) {
 	if err := waitForTrue(pLenIs(2), 10*time.Second); err != nil {
 		t.Fatalf("timed out waiting for ingressWatcher to process events")
 	}
-	watcher.Delete(testIngressA)
+	watcher.Delete(privateIngressHostsAB)
 	if err := waitForTrue(pLenIs(3), 10*time.Second); err != nil {
 		t.Fatalf("timed out waiting for ingressWatcher to process events")
 	}
-	watcher.Modify(testIngressB2)
+	watcher.Modify(publicIngressHostD)
 	if err := waitForTrue(pLenIs(4), 10*time.Second); err != nil {
 		t.Fatalf("timed out waiting for ingressWatcher to process events")
 	}
