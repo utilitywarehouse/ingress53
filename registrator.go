@@ -23,7 +23,6 @@ import (
 var (
 	errRegistratorMissingOption = errors.New("missing required registrator option")
 	errDNSEmptyAnswer           = errors.New("DNS nameserver returned an empty answer")
-	errInvalidTarget            = errors.New("Target specified with invalid format, should be: \"private:private-aws-elb.com\"")
 	defaultResyncPeriod         = 15 * time.Minute
 	defaultBatchProcessCycle    = 5 * time.Second
 	dnsClient                   = &dns.Client{}
@@ -162,31 +161,31 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 	case watch.Added:
 		hostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
-		metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
-		if len(hostnames) > 0 {
+		if len(hostnames) > 0 && target != "" {
+			metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
 			r.queueUpdates(route53.ChangeActionUpsert, hostnames, target)
 		}
 	case watch.Modified:
 		newHostnames := getHostnamesFromIngress(newIngress)
 		newTarget := r.getTargetForIngress(newIngress)
-		metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
-		if len(newHostnames) > 0 {
+		if len(newHostnames) > 0 && newTarget != "" {
+			metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, newTarget)
 			r.queueUpdates(route53.ChangeActionUpsert, newHostnames, newTarget)
 		}
 		oldHostnames := getHostnamesFromIngress(oldIngress)
 		oldTarget := r.getTargetForIngress(oldIngress)
 		diffHostnames := diffStringSlices(oldHostnames, newHostnames)
-		if len(diffHostnames) > 0 {
+		if len(diffHostnames) > 0 && oldTarget != "" {
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(diffHostnames), oldIngress.Name)
 			r.queueUpdates(route53.ChangeActionDelete, diffHostnames, oldTarget)
 		}
 	case watch.Deleted:
 		hostnames := getHostnamesFromIngress(oldIngress)
 		target := r.getTargetForIngress(oldIngress)
-		metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
-		if len(hostnames) > 0 {
+		if len(hostnames) > 0 && target != "" {
+			metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(hostnames), oldIngress.Name)
 			r.queueUpdates(route53.ChangeActionDelete, hostnames, target)
 		}
@@ -274,7 +273,14 @@ func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
 			return sat.Target
 		}
 	}
-	return r.options.DefaultTarget
+
+	if r.options.DefaultTarget != "" {
+		log.Printf("[WARN] didn't find a valid selector for ingress: %v, using default: %s", ingress, r.options.DefaultTarget)
+		return r.options.DefaultTarget
+	} else {
+		// no valid selector and no default target specified. Do nothing
+		return ""
+	}
 }
 
 func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRecord {
