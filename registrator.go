@@ -161,16 +161,16 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 	case watch.Added:
 		hostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
+		metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
 		if len(hostnames) > 0 && target != "" {
-			metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
 			r.queueUpdates(route53.ChangeActionUpsert, hostnames, target)
 		}
 	case watch.Modified:
 		newHostnames := getHostnamesFromIngress(newIngress)
 		newTarget := r.getTargetForIngress(newIngress)
+		metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
 		if len(newHostnames) > 0 && newTarget != "" {
-			metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, newTarget)
 			r.queueUpdates(route53.ChangeActionUpsert, newHostnames, newTarget)
 		}
@@ -184,8 +184,8 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 	case watch.Deleted:
 		hostnames := getHostnamesFromIngress(oldIngress)
 		target := r.getTargetForIngress(oldIngress)
+		metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
 		if len(hostnames) > 0 && target != "" {
-			metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(hostnames), oldIngress.Name)
 			r.queueUpdates(route53.ChangeActionDelete, hostnames, target)
 		}
