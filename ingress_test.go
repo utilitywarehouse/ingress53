@@ -118,6 +118,21 @@ var (
 			},
 		},
 	}
+
+	nonRegisteredIngress = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "nonRegisteredIngress",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				LabelName: "non-registered-target.aws.com",
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "non-registered-target.example.com"},
+			},
+		},
+	}
 )
 
 func Test_getHostnamesFromIngress(t *testing.T) {

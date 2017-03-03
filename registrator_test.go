@@ -49,7 +49,7 @@ func TestNewRegistrator_defaults(t *testing.T) {
 }
 
 func TestRegistrator_GetTargetForIngress(t *testing.T) {
-	// ingress b
+	// ingress ab
 	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
@@ -60,13 +60,33 @@ func TestRegistrator_GetTargetForIngress(t *testing.T) {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 
-	// ingress a
+	// ingress c
 	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
 	target = r.getTargetForIngress(publicIngressHostC)
 	if target != PublicTarget {
+		t.Errorf("getTargetForIngress returned unexpected value")
+	}
+
+	// ingress default
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, DefaultTarget: PrivateTarget, LabelName: LabelName, Route53ZoneID: "c"})
+	if err != nil {
+		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
+	}
+	target = r.getTargetForIngress(ingressNoLabels)
+	if target != PrivateTarget {
+		t.Errorf("getTargetForIngress returned unexpected value")
+	}
+
+	// ingress target not registered with ingress53
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
+	if err != nil {
+		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
+	}
+	target = r.getTargetForIngress(nonRegisteredIngress)
+	if target != "" {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 }
