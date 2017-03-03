@@ -285,7 +285,7 @@ func TestRegistratorHandler(t *testing.T) {
 			defer wg.Done()
 			r.processUpdateQueue()
 		}()
-		time.Sleep(10 * time.Millisecond) // XXX
+		time.Sleep(1000 * time.Millisecond) // XXX
 		close(r.stopChannel)
 		wg.Wait()
 		if !reflect.DeepEqual(mdz.zoneData, test.data) {
