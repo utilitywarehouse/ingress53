@@ -133,11 +133,11 @@ spec:
       - name: ingress53
         image: utilitywarehouse/ingress53:v1.0.0
         args:
-          - -route53-zone-id=XXXXXXXXXXXXXX \
-          - -label-name=ingress53.target \
-          - -target=private.cluster-entrypoint.com \
-          - -target=public.cluster-entrypoint.com \
-          - -default-target=private.cluster-entrypoint.com \
+          - -route53-zone-id=XXXXXXXXXXXXXX
+          - -label-name=ingress53.target
+          - -target=private.cluster-entrypoint.com
+          - -target=public.cluster-entrypoint.com
+          - -default-target=private.cluster-entrypoint.com
         resources:
           requests:
             cpu: 10m
