@@ -2,7 +2,7 @@
 
 ingress53 is a service designed to run in kubernetes and maintain DNS records for the cluster's ingress resources in AWS Route53.
 
-It will watch the kubernetes API (using the service token) for any Ingress resource changes and try to apply those records to route53 in Amazon, mapping the record to the "target name", which is the dns name of the ingress endpoint for your cluster.
+It will watch the kubernetes API (using the service token) for any Ingress resource changes and try to apply those records to route53 in Amazon, mapping the record to the "target", which is the dns name of the ingress endpoint for your cluster.
 
 # Requirements
 
@@ -42,7 +42,7 @@ The minimum AWS policy you can use:
 
 # Usage
 
-ingress53 is slightly opinionated in that it assumes there are two kinds of ingress endpoints: public and private. A kubernetes selector is used to select public ingresses, while all others default to being private.
+A kubernetes selector is used to specify the target (entry point of the cluster).
 
 You will need to create a dns record that points to your ingress endpoint[s]. We will use this to CNAME all ingress resource entries to that "target".
 
@@ -50,7 +50,7 @@ Your set up might look like this:
 
  - A ingress controller (nginx/traefik) kubernetes service running on a nodePort (:8080)
  - ELB that serves all worker nodes on :8080
- - A CNAME for the elb `private.example.com` > `my-loadbalancer-1234567890.us-west-2.elb.amazonaws.com`
+ - A CNAME for the elb `private.cluster-entrypoint.com` > `my-loadbalancer-1234567890.us-west-2.elb.amazonaws.com`
  - ingress53 service running inside the cluster
 
 Now, if you were to create an ingress kubernetes resource:
@@ -60,6 +60,8 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: my-app
+  labels:
+    ingress53.target: private.cluster-entrypoint.com
 spec:
   rules:
   - host: my-app.example.com
@@ -71,15 +73,17 @@ spec:
           servicePort: 80
 ```
 
-ingress53 will create a CNAME record in route53: `my-app.example.com` > `private.example.com`
+ingress53 will create a CNAME record in route53: `my-app.example.com` > `private.cluster-entrypoint.com`
 
 You can test it locally (please refer to the command line help for more options):
 
 ```sh
 ./ingress53 \
     -route53-zone-id=XXXXXXXXXXXXXX \
-    -target-private=private.example.com \
-    -target-public=public.example.com \
+    -label-name=ingress53.target \
+    -target=private.cluster-entrypoint.com \
+    -target=public.cluster-entrypoint.com \
+    -default-target=private.cluster-entrypoint.com \
     -kubernetes-config=$HOME/.kube/config \
     -dry-run
 ```
@@ -129,10 +133,11 @@ spec:
       - name: ingress53
         image: utilitywarehouse/ingress53:v1.0.0
         args:
-          - -route53-zone-id=XXXXXX
-          - -target-private=private.example.com
-          - -target-public=public.example.com
-          - -public-ingress-selector=ingress-tag-name:ingress-tag-value
+          - -route53-zone-id=XXXXXXXXXXXXXX \
+          - -label-name=ingress53.target \
+          - -target=private.cluster-entrypoint.com \
+          - -target=public.cluster-entrypoint.com \
+          - -default-target=private.cluster-entrypoint.com \
         resources:
           requests:
             cpu: 10m
