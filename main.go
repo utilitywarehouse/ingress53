@@ -85,7 +85,7 @@ var (
 )
 
 func init() {
-	flag.Var(&targets, "targets", "List of endpoints (ELB) targets to map ingress records to")
+	flag.Var(&targets, "target", "List of endpoints (ELB) targets to map ingress records to")
 
 	luf := &logutils.LevelFilter{
 		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "ERROR"},
