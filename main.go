@@ -37,14 +37,13 @@ func (s *strslice) Set(value string) error {
 	return nil
 }
 
-// Define a flag to accumulate durations. Because it has a special type,
-// we need to use the Var function and therefore create the flag during
-// init.
-
-var targets strslice
-
 var (
 	appGitHash = "master"
+
+	// Define a flag to accumulate durations. Because it has a special type,
+	// we need to use the Var function and therefore create the flag during
+	// init.
+	targets strslice
 
 	kubeConfig    = flag.String("kubernetes-config", "", "path to the kubeconfig file, if unspecified then in-cluster config will be used")
 	labelName     = flag.String("label-name", "", "Kubernetes key of the label that specifies the target type")
@@ -84,28 +83,23 @@ var (
 	)
 )
 
-func init() {
+func main() {
+	prometheus.MustRegister(metricUpdatesApplied)
+	prometheus.MustRegister(metricUpdatesReceived)
+	prometheus.MustRegister(metricUpdatesRejected)
+
 	flag.Var(&targets, "target", "List of endpoints (ELB) targets to map ingress records to")
+	flag.Parse()
 
 	luf := &logutils.LevelFilter{
 		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "ERROR"},
 		MinLevel: logutils.LogLevel("INFO"),
 		Writer:   os.Stdout,
 	}
-
 	if *debugLogs {
 		luf.MinLevel = logutils.LogLevel("DEBUG")
 	}
-
 	log.SetOutput(luf)
-
-	prometheus.MustRegister(metricUpdatesApplied)
-	prometheus.MustRegister(metricUpdatesReceived)
-	prometheus.MustRegister(metricUpdatesRejected)
-}
-
-func main() {
-	flag.Parse()
 
 	ro := registratorOptions{
 		Targets:       targets,

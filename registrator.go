@@ -275,7 +275,7 @@ func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
 	}
 
 	if r.options.DefaultTarget != "" {
-		log.Printf("[WARN] didn't find a valid selector for ingress: %s, using default: %s", ingress.Name, r.options.DefaultTarget)
+		log.Printf("[INFO] didn't find a valid selector for ingress: %s, using default: %s", ingress.Name, r.options.DefaultTarget)
 		return r.options.DefaultTarget
 	} else {
 		// no valid selector and no default target specified. Do nothing
