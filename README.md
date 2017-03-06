@@ -80,7 +80,6 @@ You can test it locally (please refer to the command line help for more options)
 ```sh
 ./ingress53 \
     -route53-zone-id=XXXXXXXXXXXXXX \
-    -label-name=ingress53.target \
     -target=private.cluster-entrypoint.com \
     -target=public.cluster-entrypoint.com \
     -default-target=private.cluster-entrypoint.com \
@@ -134,7 +133,6 @@ spec:
         image: utilitywarehouse/ingress53:v1.0.0
         args:
           - -route53-zone-id=XXXXXXXXXXXXXX
-          - -label-name=ingress53.target
           - -target=private.cluster-entrypoint.com
           - -target=public.cluster-entrypoint.com
           - -default-target=private.cluster-entrypoint.com
