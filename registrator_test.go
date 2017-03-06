@@ -18,13 +18,14 @@ import (
 )
 
 const (
-	PrivateTarget string = "private.cluster-entrypoint.com"
-	PublicTarget  string = "public.cluster-entrypoint.com"
-	LabelName     string = "ingress53.target"
+	testPrivateTarget   string = "private.cluster-entrypoint.com"
+	testPublicTarget    string = "public.cluster-entrypoint.com"
+	testTargetLabelName string = "ingress53.target"
+	testIgnoreLabelName string = "ingress53.ignore"
 )
 
 func TestNewRegistrator_defaults(t *testing.T) {
-	_, err := newRegistrator("z", []string{PrivateTarget, PublicTarget}, LabelName, PrivateTarget)
+	_, err := newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, testTargetLabelName, testIgnoreLabelName, testPrivateTarget)
 	if err == nil || err.Error() != "unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined" {
 		t.Errorf("newRegistrator did not return expected error")
 	}
@@ -36,13 +37,19 @@ func TestNewRegistrator_defaults(t *testing.T) {
 	}
 
 	// invalid label name
-	_, err = newRegistrator("z", []string{PrivateTarget, PublicTarget}, "!^7", "")
+	_, err = newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, "!^7", testIgnoreLabelName, "")
+	if err == nil {
+		t.Errorf("newRegistrator did not return expected error")
+	}
+
+	// invalid label name
+	_, err = newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, testTargetLabelName, "!^7", "")
 	if err == nil {
 		t.Errorf("newRegistrator did not return expected error")
 	}
 
 	// working
-	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
+	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -50,38 +57,38 @@ func TestNewRegistrator_defaults(t *testing.T) {
 
 func TestRegistrator_GetTargetForIngress(t *testing.T) {
 	// ingress ab
-	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
+	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
 
 	target := r.getTargetForIngress(privateIngressHostsAB)
-	if target != PrivateTarget {
+	if target != testPrivateTarget {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 
 	// ingress c
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
 	target = r.getTargetForIngress(publicIngressHostC)
-	if target != PublicTarget {
+	if target != testPublicTarget {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 
 	// ingress default
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, DefaultTarget: PrivateTarget, LabelName: LabelName, Route53ZoneID: "c"})
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, DefaultTarget: testPrivateTarget, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
 	target = r.getTargetForIngress(ingressNoLabels)
-	if target != PrivateTarget {
+	if target != testPrivateTarget {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 
 	// ingress target not registered with ingress53
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -170,9 +177,10 @@ type mockEvent struct {
 }
 
 func TestRegistratorHandler(t *testing.T) {
-	privateSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", LabelName, PrivateTarget))
-	publicSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", LabelName, PublicTarget))
-	sats := []selectorAndTarget{selectorAndTarget{Selector: privateSelector, Target: PrivateTarget}, selectorAndTarget{Selector: publicSelector, Target: PublicTarget}}
+	privateSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", testTargetLabelName, testPrivateTarget))
+	publicSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", testTargetLabelName, testPublicTarget))
+	ignoreSelector, _ := labels.Parse(fmt.Sprintf("%s=true", testIgnoreLabelName))
+	sats := []selectorAndTarget{selectorAndTarget{Selector: privateSelector, Target: testPrivateTarget}, selectorAndTarget{Selector: publicSelector, Target: testPublicTarget}}
 
 	mdz := &mockDNSZone{}
 	server, err := mdz.startMockDNSServer()
@@ -182,16 +190,18 @@ func TestRegistratorHandler(t *testing.T) {
 	}
 
 	r := &registrator{
-		dnsZone:     mdz,
-		sats:        sats,
-		updateQueue: make(chan cnameChange, 16),
+		dnsZone:        mdz,
+		sats:           sats,
+		ignoreSelector: ignoreSelector,
+		updateQueue:    make(chan cnameChange, 16),
 		ingressWatcher: &ingressWatcher{
 			stopChannel: make(chan struct{}),
 		},
 		options: registratorOptions{
-			Targets:       []string{PrivateTarget, PublicTarget},
-			LabelName:     LabelName,
-			Route53ZoneID: "c",
+			Targets:         []string{testPrivateTarget, testPublicTarget},
+			TargetLabelName: testTargetLabelName,
+			IgnoreLabelName: testIgnoreLabelName,
+			Route53ZoneID:   "c",
 		},
 	}
 
@@ -211,9 +221,16 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, privateIngressHostsAB},
 			},
 			map[string]string{
-				"a.example.com": PrivateTarget,
-				"b.example.com": PrivateTarget,
+				"a.example.com": testPrivateTarget,
+				"b.example.com": testPrivateTarget,
 			},
+		},
+		{
+			"example.com.",
+			[]mockEvent{
+				{watch.Added, nil, privateIngressHostAIgnored},
+			},
+			map[string]string{},
 		},
 		{
 			"example.com.",
@@ -230,7 +247,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Modified, privateIngressHostsAB, publicIngressHostC},
 			},
 			map[string]string{
-				"c.example.com": PublicTarget,
+				"c.example.com": testPublicTarget,
 			},
 		},
 		{
@@ -241,7 +258,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, publicIngressHostC},
 			},
 			map[string]string{
-				"c.example.com": PublicTarget,
+				"c.example.com": testPublicTarget,
 			},
 		},
 		{
@@ -257,7 +274,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, privateIngressHostE},
 			},
 			map[string]string{
-				"e.example.com": PrivateTarget,
+				"e.example.com": testPrivateTarget,
 			},
 		},
 		{
@@ -267,7 +284,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, privateIngressHostEDup},
 			},
 			map[string]string{
-				"e.example.com": PrivateTarget,
+				"e.example.com": testPrivateTarget,
 			},
 		},
 		{
@@ -286,7 +303,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Modified, privateIngressHostE, publicIngressHostEDup},
 			},
 			map[string]string{
-				"e.example.com": PublicTarget,
+				"e.example.com": testPublicTarget,
 			},
 		},
 	}
