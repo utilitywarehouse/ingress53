@@ -48,16 +48,18 @@ type cnameRecord struct {
 type registrator struct {
 	dnsZone
 	*ingressWatcher
-	options     registratorOptions
-	sats        []selectorAndTarget
-	updateQueue chan cnameChange
+	options        registratorOptions
+	sats           []selectorAndTarget
+	ignoreSelector labels.Selector
+	updateQueue    chan cnameChange
 }
 
 type registratorOptions struct {
 	AWSSessionOptions *session.Options
 	KubernetesConfig  *rest.Config
 	Targets           []string // required
-	LabelName         string   // required
+	TargetLabelName   string   // required
+	IgnoreLabelName   string   // required
 	DefaultTarget     string   // required
 	Route53ZoneID     string   // required
 	ResyncPeriod      time.Duration
@@ -68,27 +70,27 @@ type selectorAndTarget struct {
 	Target   string
 }
 
-func newRegistrator(zoneID string, targets []string, labelName, defaultTarget string) (*registrator, error) {
+func newRegistrator(zoneID string, targets []string, targetLabelName, ignoreLabelName, defaultTarget string) (*registrator, error) {
 	return newRegistratorWithOptions(
 		registratorOptions{
-			Route53ZoneID: zoneID,
-			Targets:       targets,
-			LabelName:     labelName,
-			DefaultTarget: defaultTarget,
+			Route53ZoneID:   zoneID,
+			Targets:         targets,
+			TargetLabelName: targetLabelName,
+			IgnoreLabelName: ignoreLabelName,
+			DefaultTarget:   defaultTarget,
 		})
 }
 
 func newRegistratorWithOptions(options registratorOptions) (*registrator, error) {
 	// check required options are set
-	if len(options.Targets) == 0 || options.Route53ZoneID == "" || options.LabelName == "" {
+	if len(options.Targets) == 0 || options.Route53ZoneID == "" || options.TargetLabelName == "" || options.IgnoreLabelName == "" {
 		return nil, errRegistratorMissingOption
 	}
 
 	var sats []selectorAndTarget
-
 	for _, target := range options.Targets {
 		var sb bytes.Buffer
-		sb.WriteString(options.LabelName)
+		sb.WriteString(options.TargetLabelName)
 		sb.WriteString("=")
 		sb.WriteString(target)
 
@@ -97,6 +99,11 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 			return nil, err
 		}
 		sats = append(sats, selectorAndTarget{Selector: s, Target: target})
+	}
+
+	ignoreLabel, err := labels.Parse(fmt.Sprintf("%s=true", options.IgnoreLabelName))
+	if err != nil {
+		return nil, err
 	}
 
 	if options.AWSSessionOptions == nil {
@@ -116,9 +123,10 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 	}
 
 	return &registrator{
-		options:     options,
-		sats:        sats,
-		updateQueue: make(chan cnameChange, 64),
+		options:        options,
+		sats:           sats,
+		ignoreSelector: ignoreLabel,
+		updateQueue:    make(chan cnameChange, 64),
 	}, nil
 }
 
@@ -268,6 +276,11 @@ func (r *registrator) applyBatch(changes []cnameChange) {
 }
 
 func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
+	if r.ignoreSelector.Matches(labels.Set(ingress.Labels)) {
+		log.Printf("[DEBUG] found ignore label for ingress: %s", ingress.Name)
+		return ""
+	}
+
 	for _, sat := range r.sats {
 		if sat.Selector.Matches(labels.Set(ingress.Labels)) {
 			return sat.Target

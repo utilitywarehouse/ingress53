@@ -20,7 +20,7 @@ var (
 			Name:      "privateIngressHostsAB",
 			Namespace: api.NamespaceDefault,
 			Labels: map[string]string{
-				LabelName: PrivateTarget,
+				testTargetLabelName: testPrivateTarget,
 			},
 		},
 		Spec: v1beta1.IngressSpec{
@@ -31,12 +31,28 @@ var (
 		},
 	}
 
+	privateIngressHostAIgnored = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "privateIngressHostA",
+			Namespace: api.NamespaceDefault,
+			Labels: map[string]string{
+				testTargetLabelName: testPrivateTarget,
+				testIgnoreLabelName: "true",
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "a.example.com"},
+			},
+		},
+	}
+
 	publicIngressHostC = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "publicIngressHostCD",
 			Namespace: api.NamespaceDefault,
 			Labels: map[string]string{
-				LabelName: PublicTarget,
+				testTargetLabelName: testPublicTarget,
 			},
 		},
 		Spec: v1beta1.IngressSpec{
@@ -51,7 +67,7 @@ var (
 			Name:      "publicIngressHostCD",
 			Namespace: api.NamespaceDefault,
 			Labels: map[string]string{
-				LabelName: PublicTarget,
+				testTargetLabelName: testPublicTarget,
 			},
 		},
 		Spec: v1beta1.IngressSpec{
@@ -66,7 +82,7 @@ var (
 			Name:      "ingressHostE",
 			Namespace: api.NamespaceDefault,
 			Labels: map[string]string{
-				LabelName: PrivateTarget,
+				testTargetLabelName: testPrivateTarget,
 			},
 		},
 		Spec: v1beta1.IngressSpec{
@@ -81,7 +97,7 @@ var (
 			Name:      "ingressHostE",
 			Namespace: api.NamespaceDefault,
 			Labels: map[string]string{
-				LabelName: PrivateTarget,
+				testTargetLabelName: testPrivateTarget,
 			},
 		},
 		Spec: v1beta1.IngressSpec{
@@ -96,7 +112,7 @@ var (
 			Name:      "ingressHostE",
 			Namespace: api.NamespaceDefault,
 			Labels: map[string]string{
-				LabelName: PublicTarget,
+				testTargetLabelName: testPublicTarget,
 			},
 		},
 		Spec: v1beta1.IngressSpec{
@@ -124,7 +140,7 @@ var (
 			Name:      "nonRegisteredIngress",
 			Namespace: api.NamespaceDefault,
 			Labels: map[string]string{
-				LabelName: "non-registered-target.aws.com",
+				testTargetLabelName: "non-registered-target.aws.com",
 			},
 		},
 		Spec: v1beta1.IngressSpec{
