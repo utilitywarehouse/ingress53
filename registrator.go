@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -47,44 +48,55 @@ type cnameRecord struct {
 type registrator struct {
 	dnsZone
 	*ingressWatcher
-	options        registratorOptions
-	publicSelector labels.Selector
-	updateQueue    chan cnameChange
+	options     registratorOptions
+	sats        []selectorAndTarget
+	updateQueue chan cnameChange
 }
 
 type registratorOptions struct {
-	AWSSessionOptions      *session.Options
-	KubernetesConfig       *rest.Config
-	PrivateHostname        string // required
-	PublicHostname         string // required
-	PublicResourceSelector string
-	Route53ZoneID          string // required
-	ResyncPeriod           time.Duration
+	AWSSessionOptions *session.Options
+	KubernetesConfig  *rest.Config
+	Targets           []string // required
+	LabelName         string   // required
+	DefaultTarget     string   // required
+	Route53ZoneID     string   // required
+	ResyncPeriod      time.Duration
 }
 
-func newRegistrator(zoneID, publicHostname, privateHostname, publicSelector string) (*registrator, error) {
-	return newRegistratorWithOptions(registratorOptions{
-		PrivateHostname:        privateHostname,
-		PublicHostname:         publicHostname,
-		PublicResourceSelector: publicSelector,
-		Route53ZoneID:          zoneID,
-	})
+type selectorAndTarget struct {
+	Selector labels.Selector
+	Target   string
+}
+
+func newRegistrator(zoneID string, targets []string, labelName, defaultTarget string) (*registrator, error) {
+	return newRegistratorWithOptions(
+		registratorOptions{
+			Route53ZoneID: zoneID,
+			Targets:       targets,
+			LabelName:     labelName,
+			DefaultTarget: defaultTarget,
+		})
 }
 
 func newRegistratorWithOptions(options registratorOptions) (*registrator, error) {
-	if options.PrivateHostname == "" || options.PublicHostname == "" || options.Route53ZoneID == "" {
+	// check required options are set
+	if len(options.Targets) == 0 || options.Route53ZoneID == "" || options.LabelName == "" {
 		return nil, errRegistratorMissingOption
 	}
 
-	var publicSelector labels.Selector
-	if options.PublicResourceSelector == "" {
-		publicSelector = labels.Nothing()
-	} else {
-		s, err := labels.Parse(options.PublicResourceSelector)
+	var sats []selectorAndTarget
+
+	for _, target := range options.Targets {
+		var sb bytes.Buffer
+		sb.WriteString(options.LabelName)
+		sb.WriteString("=")
+		sb.WriteString(target)
+
+		s, err := labels.Parse(sb.String())
 		if err != nil {
 			return nil, err
 		}
-		publicSelector = s
+		sats = append(sats, selectorAndTarget{Selector: s, Target: target})
 	}
 
 	if options.AWSSessionOptions == nil {
@@ -104,9 +116,9 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 	}
 
 	return &registrator{
-		options:        options,
-		publicSelector: publicSelector,
-		updateQueue:    make(chan cnameChange, 64),
+		options:     options,
+		sats:        sats,
+		updateQueue: make(chan cnameChange, 64),
 	}, nil
 }
 
@@ -150,7 +162,7 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 		hostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
 		metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
-		if len(hostnames) > 0 {
+		if len(hostnames) > 0 && target != "" {
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
 			r.queueUpdates(route53.ChangeActionUpsert, hostnames, target)
 		}
@@ -158,14 +170,14 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 		newHostnames := getHostnamesFromIngress(newIngress)
 		newTarget := r.getTargetForIngress(newIngress)
 		metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
-		if len(newHostnames) > 0 {
+		if len(newHostnames) > 0 && newTarget != "" {
 			log.Printf("[DEBUG] queued update of %d records for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, newTarget)
 			r.queueUpdates(route53.ChangeActionUpsert, newHostnames, newTarget)
 		}
 		oldHostnames := getHostnamesFromIngress(oldIngress)
 		oldTarget := r.getTargetForIngress(oldIngress)
 		diffHostnames := diffStringSlices(oldHostnames, newHostnames)
-		if len(diffHostnames) > 0 {
+		if len(diffHostnames) > 0 && oldTarget != "" {
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(diffHostnames), oldIngress.Name)
 			r.queueUpdates(route53.ChangeActionDelete, diffHostnames, oldTarget)
 		}
@@ -173,7 +185,7 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 		hostnames := getHostnamesFromIngress(oldIngress)
 		target := r.getTargetForIngress(oldIngress)
 		metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
-		if len(hostnames) > 0 {
+		if len(hostnames) > 0 && target != "" {
 			log.Printf("[DEBUG] queued deletion of %d records for ingress %s", len(hostnames), oldIngress.Name)
 			r.queueUpdates(route53.ChangeActionDelete, hostnames, target)
 		}
@@ -256,10 +268,20 @@ func (r *registrator) applyBatch(changes []cnameChange) {
 }
 
 func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
-	if r.publicSelector.Matches(labels.Set(ingress.Labels)) {
-		return r.options.PublicHostname
+	for _, sat := range r.sats {
+		if sat.Selector.Matches(labels.Set(ingress.Labels)) {
+			return sat.Target
+		}
 	}
-	return r.options.PrivateHostname
+
+	if r.options.DefaultTarget != "" {
+		log.Printf("[DEBUG] didn't find a valid selector for ingress: %s, using default: %s", ingress.Name, r.options.DefaultTarget)
+		return r.options.DefaultTarget
+	} else {
+		// no valid selector and no default target specified. Do nothing
+		log.Printf("[DEBUG] cannot compute target for ingress: %s, invalid selector and no default target set", ingress.Name, r.options.DefaultTarget)
+		return ""
+	}
 }
 
 func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRecord {

@@ -17,8 +17,14 @@ import (
 	"k8s.io/client-go/1.5/rest"
 )
 
+const (
+	PrivateTarget string = "private.cluster-entrypoint.com"
+	PublicTarget  string = "public.cluster-entrypoint.com"
+	LabelName     string = "ingress53.target"
+)
+
 func TestNewRegistrator_defaults(t *testing.T) {
-	_, err := newRegistrator("z", "a", "b", "")
+	_, err := newRegistrator("z", []string{PrivateTarget, PublicTarget}, LabelName, PrivateTarget)
 	if err == nil || err.Error() != "unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined" {
 		t.Errorf("newRegistrator did not return expected error")
 	}
@@ -29,35 +35,58 @@ func TestNewRegistrator_defaults(t *testing.T) {
 		t.Errorf("newRegistrator did not return expected error")
 	}
 
-	// invalid selector
-	_, err = newRegistrator("z", "a", "b", "a^b")
+	// invalid label name
+	_, err = newRegistrator("z", []string{PrivateTarget, PublicTarget}, "!^7", "")
 	if err == nil {
 		t.Errorf("newRegistrator did not return expected error")
 	}
 
 	// working
-	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneID: "c"})
+	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
 }
 
 func TestRegistrator_GetTargetForIngress(t *testing.T) {
-	// empty selector
-	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneID: "c"})
+	// ingress ab
+	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
-	if r.getTargetForIngress(testIngressB) != "b" {
+
+	target := r.getTargetForIngress(privateIngressHostsAB)
+	if target != PrivateTarget {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 
-	// proper selector
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, PublicHostname: "a", PrivateHostname: "b", Route53ZoneID: "c", PublicResourceSelector: "public=true"})
+	// ingress c
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
-	if r.getTargetForIngress(testIngressB) != "a" {
+	target = r.getTargetForIngress(publicIngressHostC)
+	if target != PublicTarget {
+		t.Errorf("getTargetForIngress returned unexpected value")
+	}
+
+	// ingress default
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, DefaultTarget: PrivateTarget, LabelName: LabelName, Route53ZoneID: "c"})
+	if err != nil {
+		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
+	}
+	target = r.getTargetForIngress(ingressNoLabels)
+	if target != PrivateTarget {
+		t.Errorf("getTargetForIngress returned unexpected value")
+	}
+
+	// ingress target not registered with ingress53
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{PrivateTarget, PublicTarget}, LabelName: LabelName, Route53ZoneID: "c"})
+	if err != nil {
+		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
+	}
+	target = r.getTargetForIngress(nonRegisteredIngress)
+	if target != "" {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 }
@@ -141,7 +170,10 @@ type mockEvent struct {
 }
 
 func TestRegistratorHandler(t *testing.T) {
-	s, _ := labels.Parse("public=true")
+	privateSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", LabelName, PrivateTarget))
+	publicSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", LabelName, PublicTarget))
+	sats := []selectorAndTarget{selectorAndTarget{Selector: privateSelector, Target: PrivateTarget}, selectorAndTarget{Selector: publicSelector, Target: PublicTarget}}
+
 	mdz := &mockDNSZone{}
 	server, err := mdz.startMockDNSServer()
 	defer server.Shutdown()
@@ -150,16 +182,16 @@ func TestRegistratorHandler(t *testing.T) {
 	}
 
 	r := &registrator{
-		dnsZone:        mdz,
-		publicSelector: s,
-		updateQueue:    make(chan cnameChange, 16),
+		dnsZone:     mdz,
+		sats:        sats,
+		updateQueue: make(chan cnameChange, 16),
 		ingressWatcher: &ingressWatcher{
 			stopChannel: make(chan struct{}),
 		},
 		options: registratorOptions{
-			PrivateHostname: "priv.example.com",
-			PublicHostname:  "pub.example.com",
-			Route53ZoneID:   "c",
+			Targets:       []string{PrivateTarget, PublicTarget},
+			LabelName:     LabelName,
+			Route53ZoneID: "c",
 		},
 	}
 
@@ -176,85 +208,85 @@ func TestRegistratorHandler(t *testing.T) {
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressA},
+				{watch.Added, nil, privateIngressHostsAB},
 			},
 			map[string]string{
-				"foo1.example.com": "priv.example.com",
-				"foo2.example.com": "priv.example.com",
+				"a.example.com": PrivateTarget,
+				"b.example.com": PrivateTarget,
 			},
 		},
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressA},
-				{watch.Deleted, testIngressA, nil},
+				{watch.Added, nil, privateIngressHostsAB},
+				{watch.Deleted, privateIngressHostsAB, nil},
 			},
 			map[string]string{},
 		},
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressA},
-				{watch.Modified, testIngressA, testIngressB},
+				{watch.Added, nil, privateIngressHostsAB},
+				{watch.Modified, privateIngressHostsAB, publicIngressHostC},
 			},
 			map[string]string{
-				"bar.example.com": "pub.example.com",
+				"c.example.com": PublicTarget,
 			},
 		},
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressA},
-				{watch.Deleted, testIngressA, nil},
-				{watch.Added, nil, testIngressB},
+				{watch.Added, nil, privateIngressHostsAB},
+				{watch.Deleted, privateIngressHostsAB, nil},
+				{watch.Added, nil, publicIngressHostC},
 			},
 			map[string]string{
-				"bar.example.com": "pub.example.com",
+				"c.example.com": PublicTarget,
 			},
 		},
 		{
 			"an.example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressA},
+				{watch.Added, nil, privateIngressHostsAB},
 			},
 			map[string]string{},
 		},
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressC1},
+				{watch.Added, nil, privateIngressHostE},
 			},
 			map[string]string{
-				"baz.example.com": "priv.example.com",
+				"e.example.com": PrivateTarget,
 			},
 		},
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressC1},
-				{watch.Added, nil, testIngressC2},
+				{watch.Added, nil, privateIngressHostE},
+				{watch.Added, nil, privateIngressHostEDup},
 			},
 			map[string]string{
-				"baz.example.com": "priv.example.com",
+				"e.example.com": PrivateTarget,
 			},
 		},
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressC1},
-				{watch.Added, nil, testIngressC3},
+				{watch.Added, nil, privateIngressHostE},
+				{watch.Added, nil, publicIngressHostEDup},
 			},
 			map[string]string{},
 		},
 		{
 			"example.com.",
 			[]mockEvent{
-				{watch.Added, nil, testIngressC1},
-				{watch.Deleted, testIngressA, nil},
-				{watch.Modified, testIngressC1, testIngressC3},
+				{watch.Added, nil, privateIngressHostE},
+				{watch.Deleted, privateIngressHostsAB, nil},
+				{watch.Modified, privateIngressHostE, publicIngressHostEDup},
 			},
 			map[string]string{
-				"baz.example.com": "pub.example.com",
+				"e.example.com": PublicTarget,
 			},
 		},
 	}
@@ -277,7 +309,7 @@ func TestRegistratorHandler(t *testing.T) {
 		close(r.stopChannel)
 		wg.Wait()
 		if !reflect.DeepEqual(mdz.zoneData, test.data) {
-			t.Errorf("handler produced unexcepted zone data for test case #%02d: %+v", i, mdz.zoneData)
+			t.Errorf("handler produced unexcepted zone data for test case #%02d: %+v, expected: %+v", i, mdz.zoneData, test.data)
 		}
 	}
 }
