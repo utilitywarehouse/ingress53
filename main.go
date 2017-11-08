@@ -47,8 +47,6 @@ var (
 
 	kubeConfig      = flag.String("kubernetes-config", "", "path to the kubeconfig file, if unspecified then in-cluster config will be used")
 	targetLabelName = flag.String("target-label", "ingress53.target", "Kubernetes key of the label that specifies the target type")
-	ingoreLabelName = flag.String("ignore-label", "ingress53.ignore", "Kubernetes key of the label that determines whether an ingress should be ignored")
-	defaultTarget   = flag.String("default-target", "", "Default target to use in the absense of matching labels")
 	r53ZoneID       = flag.String("route53-zone-id", "", "route53 hosted DNS zone id")
 	debugLogs       = flag.Bool("debug", false, "enables debug logs")
 	dryRun          = flag.Bool("dry-run", false, "if set, ingress53 will not make any Route53 changes")
@@ -105,8 +103,6 @@ func main() {
 	ro := registratorOptions{
 		Targets:         targets,
 		TargetLabelName: *targetLabelName,
-		IgnoreLabelName: *ingoreLabelName,
-		DefaultTarget:   *defaultTarget,
 		Route53ZoneID:   *r53ZoneID,
 	}
 	if *kubeConfig != "" {

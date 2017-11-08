@@ -21,11 +21,10 @@ const (
 	testPrivateTarget   string = "private.cluster-entrypoint.com"
 	testPublicTarget    string = "public.cluster-entrypoint.com"
 	testTargetLabelName string = "ingress53.target"
-	testIgnoreLabelName string = "ingress53.ignore"
 )
 
 func TestNewRegistrator_defaults(t *testing.T) {
-	_, err := newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, testTargetLabelName, testIgnoreLabelName, testPrivateTarget)
+	_, err := newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, testTargetLabelName)
 	if err == nil || err.Error() != "unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined" {
 		t.Errorf("newRegistrator did not return expected error")
 	}
@@ -37,19 +36,19 @@ func TestNewRegistrator_defaults(t *testing.T) {
 	}
 
 	// invalid label name
-	_, err = newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, "!^7", testIgnoreLabelName, "")
+	_, err = newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, "!^7")
 	if err == nil {
 		t.Errorf("newRegistrator did not return expected error")
 	}
 
 	// invalid label name
-	_, err = newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, testTargetLabelName, "!^7", "")
+	_, err = newRegistrator("z", []string{testPrivateTarget, testPublicTarget}, testTargetLabelName)
 	if err == nil {
 		t.Errorf("newRegistrator did not return expected error")
 	}
 
 	// working
-	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
+	_, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -57,7 +56,7 @@ func TestNewRegistrator_defaults(t *testing.T) {
 
 func TestRegistrator_GetTargetForIngress(t *testing.T) {
 	// ingress ab
-	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
+	r, err := newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -68,7 +67,7 @@ func TestRegistrator_GetTargetForIngress(t *testing.T) {
 	}
 
 	// ingress c
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -77,18 +76,8 @@ func TestRegistrator_GetTargetForIngress(t *testing.T) {
 		t.Errorf("getTargetForIngress returned unexpected value")
 	}
 
-	// ingress default
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, DefaultTarget: testPrivateTarget, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
-	if err != nil {
-		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
-	}
-	target = r.getTargetForIngress(ingressNoLabels)
-	if target != testPrivateTarget {
-		t.Errorf("getTargetForIngress returned unexpected value")
-	}
-
 	// ingress target not registered with ingress53
-	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, IgnoreLabelName: testIgnoreLabelName, Route53ZoneID: "c"})
+	r, err = newRegistratorWithOptions(registratorOptions{KubernetesConfig: &rest.Config{}, Targets: []string{testPrivateTarget, testPublicTarget}, TargetLabelName: testTargetLabelName, Route53ZoneID: "c"})
 	if err != nil {
 		t.Errorf("newRegistrator returned an unexpected error: %+v", err)
 	}
@@ -179,7 +168,6 @@ type mockEvent struct {
 func TestRegistratorHandler(t *testing.T) {
 	privateSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", testTargetLabelName, testPrivateTarget))
 	publicSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", testTargetLabelName, testPublicTarget))
-	ignoreSelector, _ := labels.Parse(fmt.Sprintf("%s=true", testIgnoreLabelName))
 	sats := []selectorAndTarget{selectorAndTarget{Selector: privateSelector, Target: testPrivateTarget}, selectorAndTarget{Selector: publicSelector, Target: testPublicTarget}}
 
 	mdz := &mockDNSZone{}
@@ -190,17 +178,15 @@ func TestRegistratorHandler(t *testing.T) {
 	}
 
 	r := &registrator{
-		dnsZone:        mdz,
-		sats:           sats,
-		ignoreSelector: ignoreSelector,
-		updateQueue:    make(chan cnameChange, 16),
+		dnsZone:     mdz,
+		sats:        sats,
+		updateQueue: make(chan cnameChange, 16),
 		ingressWatcher: &ingressWatcher{
 			stopChannel: make(chan struct{}),
 		},
 		options: registratorOptions{
 			Targets:         []string{testPrivateTarget, testPublicTarget},
 			TargetLabelName: testTargetLabelName,
-			IgnoreLabelName: testIgnoreLabelName,
 			Route53ZoneID:   "c",
 		},
 	}
@@ -224,13 +210,6 @@ func TestRegistratorHandler(t *testing.T) {
 				"a.example.com": testPrivateTarget,
 				"b.example.com": testPrivateTarget,
 			},
-		},
-		{
-			"example.com.",
-			[]mockEvent{
-				{watch.Added, nil, privateIngressHostAIgnored},
-			},
-			map[string]string{},
 		},
 		{
 			"example.com.",
