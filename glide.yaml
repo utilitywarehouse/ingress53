@@ -1,7 +1,7 @@
 package: github.com/utilitywarehouse/ingress53
 import:
 - package: github.com/aws/aws-sdk-go
-  version: ~1.12.24
+  version: ~1.12.25
   subpackages:
   - aws
   - aws/session

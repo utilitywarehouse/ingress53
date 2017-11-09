@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/api"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
@@ -18,7 +17,7 @@ var (
 	privateIngressHostsAB = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "privateIngressHostsAB",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels: map[string]string{
 				testTargetLabelName: testPrivateTarget,
 			},
@@ -34,7 +33,7 @@ var (
 	publicIngressHostC = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "publicIngressHostCD",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels: map[string]string{
 				testTargetLabelName: testPublicTarget,
 			},
@@ -49,7 +48,7 @@ var (
 	publicIngressHostD = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "publicIngressHostCD",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels: map[string]string{
 				testTargetLabelName: testPublicTarget,
 			},
@@ -64,7 +63,7 @@ var (
 	privateIngressHostE = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "ingressHostE",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels: map[string]string{
 				testTargetLabelName: testPrivateTarget,
 			},
@@ -79,7 +78,7 @@ var (
 	privateIngressHostEDup = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "ingressHostE",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels: map[string]string{
 				testTargetLabelName: testPrivateTarget,
 			},
@@ -94,7 +93,7 @@ var (
 	publicIngressHostEDup = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "ingressHostE",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels: map[string]string{
 				testTargetLabelName: testPublicTarget,
 			},
@@ -109,7 +108,7 @@ var (
 	ingressNoLabels = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "ingressNoLabels",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels:    map[string]string{},
 		},
 		Spec: v1beta1.IngressSpec{
@@ -122,7 +121,7 @@ var (
 	nonRegisteredIngress = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "nonRegisteredIngress",
-			Namespace: api.NamespaceDefault,
+			Namespace: v1.NamespaceDefault,
 			Labels: map[string]string{
 				testTargetLabelName: "non-registered-target.aws.com",
 			},
@@ -189,7 +188,7 @@ type testIngressEvent struct {
 
 func newTestIngressWatcherClient(initial ...v1beta1.Ingress) (*fake.Clientset, *watch.FakeWatcher) {
 	client := fake.NewSimpleClientset(&v1beta1.IngressList{Items: initial})
-	watcher, _ := client.Extensions().Ingresses(api.NamespaceDefault).Watch(api.ListOptions{})
+	watcher, _ := client.Extensions().Ingresses(v1.NamespaceDefault).Watch(v1.ListOptions{})
 	return client, watcher.(*watch.FakeWatcher)
 }
 

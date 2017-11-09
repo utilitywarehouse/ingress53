@@ -1,8 +1,8 @@
-hash: f54fee75e042177c30bc38c52d79f757df772f97ad19c3956d2403c3cf4f073e
-updated: 2017-11-08T17:54:16.319293185Z
+hash: 9745379bcd31320fded5612b0d135d3f48fab47706462e4315f5880d794bd0bc
+updated: 2017-11-09T10:56:13.556110246Z
 imports:
 - name: github.com/aws/aws-sdk-go
-  version: 6061953e33da7e141a16c70ec9535467ce7f189a
+  version: a201bf33b18ad4ab54344e4bc26b87eb6ad37b8e
   subpackages:
   - aws
   - aws/awserr
@@ -112,7 +112,7 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/miekg/dns
-  version: 388f6eea2949b6d9071d25f08cf5b6686da15265
+  version: 8223ae840e47f0c9a1ea1d5c22bdd03b30b6b3cf
   subpackages:
   - internal/socket
 - name: github.com/peterbourgon/diskv
@@ -211,7 +211,6 @@ imports:
 - name: k8s.io/apimachinery
   version: 019ae5ada31de202164b118aee88ee2d14075c31
   subpackages:
-  - pkg/api
   - pkg/api/equality
   - pkg/api/errors
   - pkg/api/meta
