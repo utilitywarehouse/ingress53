@@ -9,12 +9,11 @@ import (
 	"os/signal"
 	"strings"
 
-	"k8s.io/client-go/1.5/tools/clientcmd"
-
 	"github.com/hashicorp/logutils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/utilitywarehouse/go-operational/op"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // Define a type named "strslice" as a slice of strings

@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/client-go/1.5/kubernetes/fake"
-	"k8s.io/client-go/1.5/pkg/api"
-	"k8s.io/client-go/1.5/pkg/api/v1"
-	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/1.5/pkg/watch"
+	"k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/api"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 var (
