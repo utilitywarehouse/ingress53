@@ -129,7 +129,7 @@ spec:
     spec:
       containers:
       - name: ingress53
-        image: quay.io/repository/utilitywarehouse/ingress53:v2.0.0
+        image: quay.io/repository/utilitywarehouse/ingress53:2.0.0
         args:
           - -route53-zone-id=XXXXXXXXXXXXXX
           - -target=private.cluster-entrypoint.com
