@@ -31,22 +31,6 @@ var (
 		},
 	}
 
-	privateIngressHostAIgnored = &v1beta1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "privateIngressHostA",
-			Namespace: api.NamespaceDefault,
-			Labels: map[string]string{
-				testTargetLabelName: testPrivateTarget,
-				testIgnoreLabelName: "true",
-			},
-		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{
-				{Host: "a.example.com"},
-			},
-		},
-	}
-
 	publicIngressHostC = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "publicIngressHostCD",

@@ -82,7 +82,6 @@ You can test it locally (please refer to the command line help for more options)
     -route53-zone-id=XXXXXXXXXXXXXX \
     -target=private.cluster-entrypoint.com \
     -target=public.cluster-entrypoint.com \
-    -default-target=private.cluster-entrypoint.com \
     -kubernetes-config=$HOME/.kube/config \
     -dry-run
 ```
@@ -135,7 +134,6 @@ spec:
           - -route53-zone-id=XXXXXXXXXXXXXX
           - -target=private.cluster-entrypoint.com
           - -target=public.cluster-entrypoint.com
-          - -default-target=private.cluster-entrypoint.com
         resources:
           requests:
             cpu: 10m
