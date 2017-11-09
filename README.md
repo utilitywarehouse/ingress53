@@ -46,7 +46,7 @@ A kubernetes selector is used to specify the target (entry point of the cluster)
 
 You will need to create a dns record that points to your ingress endpoint[s]. We will use this to CNAME all ingress resource entries to that "target".
 
-Your set up might look like this:
+Your setup might look like this:
 
  - A ingress controller (nginx/traefik) kubernetes service running on a nodePort (:8080)
  - ELB that serves all worker nodes on :8080
@@ -86,7 +86,7 @@ You can test it locally (please refer to the command line help for more options)
     -dry-run
 ```
 
-You can use the generated docker image ([utilitywarehouse/ingress53](https://hub.docker.com/r/utilitywarehouse/ingress53/)) to deploy it on your kubernetes cluster.
+You can use the generated docker image ([quay.io/utilitywarehouse/ingress53](https://quay.io/repository/utilitywarehouse/ingress53?tab=tags)) to deploy it on your kubernetes cluster.
 
 ## Example kubernetes manifests
 
@@ -129,7 +129,7 @@ spec:
     spec:
       containers:
       - name: ingress53
-        image: utilitywarehouse/ingress53:v1.0.0
+        image: quay.io/repository/utilitywarehouse/ingress53:v2.0.0
         args:
           - -route53-zone-id=XXXXXXXXXXXXXX
           - -target=private.cluster-entrypoint.com
@@ -165,4 +165,4 @@ $ cd ingress53
 $ go build .
 ```
 
-The project uses [glide](https://glide.sh/) to manage dependencies but at the same time, they are vendored for simplicity.
+The project uses [glide](https://glide.sh/) to manage dependencies for development purposes but you don't need to use it, `go get` will work just as well.
