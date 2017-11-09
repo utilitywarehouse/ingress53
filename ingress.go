@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"k8s.io/client-go/1.5/kubernetes"
-	"k8s.io/client-go/1.5/pkg/api"
-	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/1.5/pkg/runtime"
-	"k8s.io/client-go/1.5/pkg/watch"
-	"k8s.io/client-go/1.5/tools/cache"
+	"k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 type eventHandlerFunc func(eventType watch.EventType, oldIngress *v1beta1.Ingress, newIngress *v1beta1.Ingress)
@@ -32,11 +32,11 @@ func newIngressWatcher(client kubernetes.Interface, eventHandler eventHandlerFun
 
 func (iw *ingressWatcher) Start() {
 	lw := &cache.ListWatch{
-		ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-			return iw.client.Extensions().Ingresses(api.NamespaceAll).List(options)
+		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			return iw.client.Extensions().Ingresses(v1.NamespaceAll).List(options)
 		},
-		WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-			return iw.client.Extensions().Ingresses(api.NamespaceAll).Watch(options)
+		WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			return iw.client.Extensions().Ingresses(v1.NamespaceAll).Watch(options)
 		},
 	}
 
