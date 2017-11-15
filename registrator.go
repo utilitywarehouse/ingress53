@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -83,12 +82,7 @@ func newRegistratorWithOptions(options registratorOptions) (*registrator, error)
 	}
 	var sats []selectorAndTarget
 	for _, target := range options.Targets {
-		var sb bytes.Buffer
-		sb.WriteString(options.TargetLabelName)
-		sb.WriteString("=")
-		sb.WriteString(target)
-
-		s, err := labels.Parse(sb.String())
+		s, err := labels.Parse(options.TargetLabelName + "=" + target)
 		if err != nil {
 			return nil, err
 		}
