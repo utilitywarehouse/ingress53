@@ -15,27 +15,31 @@ import (
 type eventHandlerFunc func(eventType watch.EventType, oldIngress *v1beta1.Ingress, newIngress *v1beta1.Ingress)
 
 type ingressWatcher struct {
-	client       kubernetes.Interface
-	eventHandler eventHandlerFunc
-	resyncPeriod time.Duration
-	stopChannel  chan struct{}
+	client        kubernetes.Interface
+	eventHandler  eventHandlerFunc
+	resyncPeriod  time.Duration
+	labelSelector string
+	stopChannel   chan struct{}
 }
 
-func newIngressWatcher(client kubernetes.Interface, eventHandler eventHandlerFunc, resyncPeriod time.Duration) *ingressWatcher {
+func newIngressWatcher(client kubernetes.Interface, eventHandler eventHandlerFunc, labelSelector string, resyncPeriod time.Duration) *ingressWatcher {
 	return &ingressWatcher{
-		client:       client,
-		eventHandler: eventHandler,
-		resyncPeriod: resyncPeriod,
-		stopChannel:  make(chan struct{}),
+		client:        client,
+		eventHandler:  eventHandler,
+		resyncPeriod:  resyncPeriod,
+		labelSelector: labelSelector,
+		stopChannel:   make(chan struct{}),
 	}
 }
 
 func (iw *ingressWatcher) Start() {
 	lw := &cache.ListWatch{
 		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			options.LabelSelector = iw.labelSelector
 			return iw.client.Extensions().Ingresses(v1.NamespaceAll).List(options)
 		},
 		WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			options.LabelSelector = iw.labelSelector
 			return iw.client.Extensions().Ingresses(v1.NamespaceAll).Watch(options)
 		},
 	}

@@ -135,7 +135,7 @@ func (r *registrator) Start() error {
 	if err != nil {
 		return err
 	}
-	r.ingressWatcher = newIngressWatcher(kubeClient, r.handler, r.options.ResyncPeriod)
+	r.ingressWatcher = newIngressWatcher(kubeClient, r.handler, r.options.TargetLabelName, r.options.ResyncPeriod)
 	log.Println("[INFO] setup kubernetes ingress watcher")
 
 	wg := sync.WaitGroup{}
