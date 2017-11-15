@@ -58,17 +58,7 @@ func (iw *ingressWatcher) Start() {
 
 	_, controller := cache.NewInformer(lw, &v1beta1.Ingress{}, iw.resyncPeriod, eh)
 	log.Println("[INFO] starting ingress watcher")
-
-	// TODO: change controller startup when it's fixed upstream
-	// The controller is started like so: wait.Until(c.processLoop, time.Second, stopCh)
-	// However, the processLoop function does not ever return which means that
-	// `wait.Until()` is unable to exit cleanly when `stopCh` is closed.
-	// Closing `stopCh`, however, will stop the controller from processing
-	// events since the internal reflector is stopped properly. This is why the
-	// controller is started in a go func below.
-	go controller.Run(iw.stopChannel)
-	<-iw.stopChannel
-
+	controller.Run(iw.stopChannel)
 	log.Println("[INFO] ingress watcher stopped")
 }
 
