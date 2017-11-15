@@ -43,7 +43,6 @@ func (iw *ingressWatcher) Start() {
 			return iw.client.Extensions().Ingresses(v1.NamespaceAll).Watch(options)
 		},
 	}
-
 	eh := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			iw.eventHandler(watch.Added, nil, obj.(*v1beta1.Ingress))
@@ -55,7 +54,6 @@ func (iw *ingressWatcher) Start() {
 			iw.eventHandler(watch.Deleted, obj.(*v1beta1.Ingress), nil)
 		},
 	}
-
 	_, controller := cache.NewInformer(lw, &v1beta1.Ingress{}, iw.resyncPeriod, eh)
 	log.Println("[INFO] starting ingress watcher")
 	controller.Run(iw.stopChannel)
@@ -69,21 +67,17 @@ func (iw *ingressWatcher) Stop() {
 
 func getHostnamesFromIngress(ingress *v1beta1.Ingress) []string {
 	hostnames := []string{}
-
 	for _, rule := range ingress.Spec.Rules {
 		found := false
-
 		for _, h := range hostnames {
 			if h == rule.Host {
 				found = true
 				break
 			}
 		}
-
 		if !found {
 			hostnames = append(hostnames, rule.Host)
 		}
 	}
-
 	return hostnames
 }

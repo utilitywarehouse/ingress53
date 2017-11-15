@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	errRoute53NoHostedZoneFound = errors.New("could not find a Route53 hosted zone")
 	errRoute53WaitWatchTimedOut = errors.New("timed out waiting for changes to be applied")
 
 	defaultRoute53RecordTTL             int64 = 60
@@ -28,14 +27,10 @@ type route53Zone struct {
 }
 
 func newRoute53Zone(zoneID string, route53session route53iface.Route53API) (*route53Zone, error) {
-	ret := &route53Zone{
-		api: route53session,
-	}
-
+	ret := &route53Zone{api: route53session}
 	if err := ret.setZone(zoneID); err != nil {
 		return nil, err
 	}
-
 	return ret, nil
 }
 
@@ -60,7 +55,6 @@ func (z *route53Zone) changeCnames(action string, records []cnameRecord) error {
 			},
 		}
 	}
-
 	resp, err := z.api.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
 		ChangeBatch: &route53.ChangeBatch{
 			Changes: changes,
@@ -71,23 +65,19 @@ func (z *route53Zone) changeCnames(action string, records []cnameRecord) error {
 	if err != nil {
 		return err
 	}
-
 	log.Println("[DEBUG] route53 changes have been submitted, waiting for nameservers to sync")
-
-	return z.waitForChange(*resp.ChangeInfo.Id)
+	return z.waitForSync(*resp.ChangeInfo.Id)
 }
 
-func (z *route53Zone) waitForChange(changeID string) error {
+func (z *route53Zone) waitForSync(changeID string) error {
 	timeout := time.NewTimer(defaultRoute53ZoneWaitWatchTimeout)
 	tick := time.NewTicker(defaultRoute53ZoneWaitWatchInterval)
 	defer func() {
 		timeout.Stop()
 		tick.Stop()
 	}()
-
 	var err error
 	var change *route53.GetChangeOutput
-
 	for {
 		select {
 		case <-tick.C:
@@ -95,11 +85,9 @@ func (z *route53Zone) waitForChange(changeID string) error {
 			if err != nil {
 				return err
 			}
-
 			if *change.ChangeInfo.Status == route53.ChangeStatusInsync {
 				return nil
 			}
-
 			log.Printf("[DEBUG] route53 changes are still being applied, waiting for %s", defaultRoute53ZoneWaitWatchInterval.String())
 		case <-timeout.C:
 			return errRoute53WaitWatchTimedOut
@@ -108,20 +96,16 @@ func (z *route53Zone) waitForChange(changeID string) error {
 }
 
 func (z *route53Zone) setZone(id string) error {
-	zone, err := z.api.GetHostedZone(&route53.GetHostedZoneInput{
-		Id: aws.String(id),
-	})
+	zone, err := z.api.GetHostedZone(&route53.GetHostedZoneInput{Id: aws.String(id)})
 	if err != nil {
 		return err
 	}
-
 	z.Name = *zone.HostedZone.Name
 	z.ID = *zone.HostedZone.Id
 	z.Nameservers = make([]string, len(zone.DelegationSet.NameServers))
 	for i, ns := range zone.DelegationSet.NameServers {
 		z.Nameservers[i] = *ns
 	}
-
 	return nil
 }
 
