@@ -15,31 +15,34 @@ import (
 type eventHandlerFunc func(eventType watch.EventType, oldIngress *v1beta1.Ingress, newIngress *v1beta1.Ingress)
 
 type ingressWatcher struct {
-	client       kubernetes.Interface
-	eventHandler eventHandlerFunc
-	resyncPeriod time.Duration
-	stopChannel  chan struct{}
+	client        kubernetes.Interface
+	eventHandler  eventHandlerFunc
+	resyncPeriod  time.Duration
+	labelSelector string
+	stopChannel   chan struct{}
 }
 
-func newIngressWatcher(client kubernetes.Interface, eventHandler eventHandlerFunc, resyncPeriod time.Duration) *ingressWatcher {
+func newIngressWatcher(client kubernetes.Interface, eventHandler eventHandlerFunc, labelSelector string, resyncPeriod time.Duration) *ingressWatcher {
 	return &ingressWatcher{
-		client:       client,
-		eventHandler: eventHandler,
-		resyncPeriod: resyncPeriod,
-		stopChannel:  make(chan struct{}),
+		client:        client,
+		eventHandler:  eventHandler,
+		resyncPeriod:  resyncPeriod,
+		labelSelector: labelSelector,
+		stopChannel:   make(chan struct{}),
 	}
 }
 
 func (iw *ingressWatcher) Start() {
 	lw := &cache.ListWatch{
 		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			options.LabelSelector = iw.labelSelector
 			return iw.client.Extensions().Ingresses(v1.NamespaceAll).List(options)
 		},
 		WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			options.LabelSelector = iw.labelSelector
 			return iw.client.Extensions().Ingresses(v1.NamespaceAll).Watch(options)
 		},
 	}
-
 	eh := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			iw.eventHandler(watch.Added, nil, obj.(*v1beta1.Ingress))
@@ -51,20 +54,9 @@ func (iw *ingressWatcher) Start() {
 			iw.eventHandler(watch.Deleted, obj.(*v1beta1.Ingress), nil)
 		},
 	}
-
 	_, controller := cache.NewInformer(lw, &v1beta1.Ingress{}, iw.resyncPeriod, eh)
 	log.Println("[INFO] starting ingress watcher")
-
-	// TODO: change controller startup when it's fixed upstream
-	// The controller is started like so: wait.Until(c.processLoop, time.Second, stopCh)
-	// However, the processLoop function does not ever return which means that
-	// `wait.Until()` is unable to exit cleanly when `stopCh` is closed.
-	// Closing `stopCh`, however, will stop the controller from processing
-	// events since the internal reflector is stopped properly. This is why the
-	// controller is started in a go func below.
-	go controller.Run(iw.stopChannel)
-	<-iw.stopChannel
-
+	controller.Run(iw.stopChannel)
 	log.Println("[INFO] ingress watcher stopped")
 }
 
@@ -75,21 +67,17 @@ func (iw *ingressWatcher) Stop() {
 
 func getHostnamesFromIngress(ingress *v1beta1.Ingress) []string {
 	hostnames := []string{}
-
 	for _, rule := range ingress.Spec.Rules {
 		found := false
-
 		for _, h := range hostnames {
 			if h == rule.Host {
 				found = true
 				break
 			}
 		}
-
 		if !found {
 			hostnames = append(hostnames, rule.Host)
 		}
 	}
-
 	return hostnames
 }

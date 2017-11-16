@@ -227,7 +227,7 @@ func TestIngressWatcher(t *testing.T) {
 		pM.Lock()
 		processed = append(processed, testIngressEvent{t, o, n})
 		pM.Unlock()
-	}, 0)
+	}, "", 0)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
