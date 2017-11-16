@@ -140,36 +140,56 @@ func (r *registrator) handler(eventType watch.EventType, oldIngress *v1beta1.Ing
 	switch eventType {
 	case watch.Added:
 		log.Printf("[DEBUG] received %s event for %s", eventType, newIngress.Name)
+		metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
 		hostnames := getHostnamesFromIngress(newIngress)
 		target := r.getTargetForIngress(newIngress)
-		metricUpdatesReceived.WithLabelValues(newIngress.Name, "add").Inc()
-		if len(hostnames) > 0 && target != "" {
-			log.Printf("[DEBUG] queued update of %d record(s) for ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
+		if target == "" {
+			log.Printf("[INFO] invalid ingress target for new ingress %s: %s", newIngress.Name, newIngress.Labels[r.options.TargetLabelName])
+		} else if len(hostnames) == 0 {
+			log.Printf("[INFO] could not extract hostnames from new ingress %s", newIngress.Name)
+		} else {
+			log.Printf("[DEBUG] queued update of %d record(s) for new ingress %s, pointing to %s", len(hostnames), newIngress.Name, target)
 			r.queueUpdates(route53.ChangeActionUpsert, hostnames, target)
 		}
 	case watch.Modified:
-		log.Printf("[DEBUG] received %s event for %s -> %s", eventType, oldIngress.Name, newIngress.Name)
+		log.Printf("[DEBUG] received %s event for %s", eventType, newIngress.Name)
+		metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
 		newHostnames := getHostnamesFromIngress(newIngress)
 		newTarget := r.getTargetForIngress(newIngress)
-		metricUpdatesReceived.WithLabelValues(newIngress.Name, "modify").Inc()
-		if len(newHostnames) > 0 && newTarget != "" {
-			log.Printf("[DEBUG] queued update of %d record(s) for ingress %s, pointing to %s", len(newHostnames), newIngress.Name, newTarget)
-			r.queueUpdates(route53.ChangeActionUpsert, newHostnames, newTarget)
-		}
 		oldHostnames := getHostnamesFromIngress(oldIngress)
 		oldTarget := r.getTargetForIngress(oldIngress)
 		diffHostnames := diffStringSlices(oldHostnames, newHostnames)
-		if len(diffHostnames) > 0 && oldTarget != "" {
-			log.Printf("[DEBUG] queued deletion of %d record(s) for ingress %s", len(diffHostnames), oldIngress.Name)
+		if len(diffHostnames) == 0 && newIngress.Labels[r.options.TargetLabelName] == oldIngress.Labels[r.options.TargetLabelName] {
+			log.Printf("[DEBUG] no changes for ingress %s, looks like a no-op resync", newIngress.Name)
+			break
+		}
+		if newTarget == "" {
+			log.Printf("[INFO] invalid ingress target for modified ingress %s: %s", newIngress.Name, newIngress.Labels[r.options.TargetLabelName])
+		} else if len(newHostnames) == 0 {
+			log.Printf("[INFO] could not extract hostnames from modified ingress %s", newIngress.Name)
+		} else {
+			log.Printf("[DEBUG] queued update of %d record(s) for modified ingress %s, pointing to %s", len(newHostnames), newIngress.Name, newTarget)
+			r.queueUpdates(route53.ChangeActionUpsert, newHostnames, newTarget)
+		}
+		if oldTarget == "" {
+			log.Printf("[INFO] invalid ingress target for previous ingress %s: %s", oldIngress.Name, oldIngress.Labels[r.options.TargetLabelName])
+		} else if len(diffHostnames) == 0 {
+			log.Printf("[DEBUG] no difference in hostnames from previous ingress %s", oldIngress.Name)
+		} else {
+			log.Printf("[DEBUG] queued deletion of %d record(s) for previous ingress %s", len(diffHostnames), oldIngress.Name)
 			r.queueUpdates(route53.ChangeActionDelete, diffHostnames, oldTarget)
 		}
 	case watch.Deleted:
 		log.Printf("[DEBUG] received %s event for %s", eventType, oldIngress.Name)
+		metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
 		hostnames := getHostnamesFromIngress(oldIngress)
 		target := r.getTargetForIngress(oldIngress)
-		metricUpdatesReceived.WithLabelValues(oldIngress.Name, "delete").Inc()
-		if len(hostnames) > 0 && target != "" {
-			log.Printf("[DEBUG] queued deletion of %d record(s) for ingress %s", len(hostnames), oldIngress.Name)
+		if target == "" {
+			log.Printf("[INFO] invalid ingress target for old ingress %s: %s", oldIngress.Name, oldIngress.Labels[r.options.TargetLabelName])
+		} else if len(hostnames) == 0 {
+			log.Printf("[INFO] could not extract hostnames from old ingress %s", oldIngress.Name)
+		} else {
+			log.Printf("[DEBUG] queued deletion of %d record(s) for old ingress %s", len(hostnames), oldIngress.Name)
 			r.queueUpdates(route53.ChangeActionDelete, hostnames, target)
 		}
 	default:
@@ -256,7 +276,6 @@ func (r *registrator) getTargetForIngress(ingress *v1beta1.Ingress) string {
 			return sat.Target
 		}
 	}
-	log.Printf("[INFO] invalid ingress target for %s: %s", ingress.Name, ingress.Labels[r.options.TargetLabelName])
 	return ""
 }
 
