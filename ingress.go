@@ -20,6 +20,7 @@ type ingressWatcher struct {
 	resyncPeriod  time.Duration
 	labelSelector string
 	stopChannel   chan struct{}
+	store         cache.Store
 }
 
 func newIngressWatcher(client kubernetes.Interface, eventHandler eventHandlerFunc, labelSelector string, resyncPeriod time.Duration) *ingressWatcher {
@@ -54,7 +55,8 @@ func (iw *ingressWatcher) Start() {
 			iw.eventHandler(watch.Deleted, obj.(*v1beta1.Ingress), nil)
 		},
 	}
-	_, controller := cache.NewInformer(lw, &v1beta1.Ingress{}, iw.resyncPeriod, eh)
+	store, controller := cache.NewInformer(lw, &v1beta1.Ingress{}, iw.resyncPeriod, eh)
+	iw.store = store
 	log.Println("[INFO] starting ingress watcher")
 	controller.Run(iw.stopChannel)
 	log.Println("[INFO] ingress watcher stopped")
@@ -63,6 +65,18 @@ func (iw *ingressWatcher) Start() {
 func (iw *ingressWatcher) Stop() {
 	log.Println("[INFO] stopping ingress watcher ...")
 	close(iw.stopChannel)
+}
+
+func (iw *ingressWatcher) HostnameOwners(hostname string) []string {
+	owners := []string{}
+	for _, i := range iw.store.List() {
+		for _, h := range getHostnamesFromIngress(i.(*v1beta1.Ingress)) {
+			if hostname == h {
+				owners = append(owners, i.(*v1beta1.Ingress).Name)
+			}
+		}
+	}
+	return owners
 }
 
 func getHostnamesFromIngress(ingress *v1beta1.Ingress) []string {
