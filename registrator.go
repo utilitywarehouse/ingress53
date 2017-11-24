@@ -293,9 +293,7 @@ func (r *registrator) pruneBatch(action string, records []cnameRecord) []cnameRe
 			o := r.ingressWatcher.HostnameOwners(u.Hostname)
 			if len(o) > 0 {
 				log.Printf("[DEBUG] will not delete record %s because it's still claimed by: %s", u.Hostname, strings.Join(o, ","))
-				break
-			}
-			if err == nil {
+			} else if err == nil {
 				pruned = append(pruned, u)
 			} else if err != errDNSEmptyAnswer {
 				log.Printf("[DEBUG] error resolving %s: %+v, will try to delete the record", u.Hostname, err)
