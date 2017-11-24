@@ -105,6 +105,36 @@ var (
 		},
 	}
 
+	privateIngressHostE2 = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "ingressHostE2",
+			Namespace: v1.NamespaceDefault,
+			Labels: map[string]string{
+				testTargetLabelName: testPrivateTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "e.example.com"},
+			},
+		},
+	}
+
+	privateIngressHostE2Fixed = &v1beta1.Ingress{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "ingressHostE2",
+			Namespace: v1.NamespaceDefault,
+			Labels: map[string]string{
+				testTargetLabelName: testPrivateTarget,
+			},
+		},
+		Spec: v1beta1.IngressSpec{
+			Rules: []v1beta1.IngressRule{
+				{Host: "e2.example.com"},
+			},
+		},
+	}
+
 	ingressNoLabels = &v1beta1.Ingress{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "ingressNoLabels",

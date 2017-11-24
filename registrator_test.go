@@ -165,6 +165,24 @@ type mockEvent struct {
 	new *v1beta1.Ingress
 }
 
+type mockStore struct {
+	items []interface{}
+}
+
+func (m *mockStore) Add(obj interface{}) error    { return nil }
+func (m *mockStore) Update(obj interface{}) error { return nil }
+func (m *mockStore) Delete(obj interface{}) error { return nil }
+func (m *mockStore) List() []interface{}          { return m.items }
+func (m *mockStore) ListKeys() []string           { return nil }
+func (m *mockStore) Get(obj interface{}) (item interface{}, exists bool, err error) {
+	return nil, false, nil
+}
+func (m *mockStore) GetByKey(key string) (item interface{}, exists bool, err error) {
+	return nil, false, nil
+}
+func (m *mockStore) Replace([]interface{}, string) error { return nil }
+func (m *mockStore) Resync() error                       { return nil }
+
 func TestRegistratorHandler(t *testing.T) {
 	privateSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", testTargetLabelName, testPrivateTarget))
 	publicSelector, _ := labels.Parse(fmt.Sprintf("%s=%s", testTargetLabelName, testPublicTarget))
@@ -183,6 +201,7 @@ func TestRegistratorHandler(t *testing.T) {
 		updateQueue: make(chan cnameChange, 16),
 		ingressWatcher: &ingressWatcher{
 			stopChannel: make(chan struct{}),
+			store:       &mockStore{},
 		},
 		options: registratorOptions{
 			Targets:         []string{testPrivateTarget, testPublicTarget},
@@ -192,14 +211,16 @@ func TestRegistratorHandler(t *testing.T) {
 	}
 
 	testCases := []struct {
-		domain string
-		events []mockEvent
-		data   map[string]string
+		domain         string
+		events         []mockEvent
+		data           map[string]string
+		storeIngresses []interface{}
 	}{
 		{
 			"",
 			[]mockEvent{},
 			map[string]string{},
+			nil,
 		},
 		{
 			"example.com.",
@@ -210,6 +231,7 @@ func TestRegistratorHandler(t *testing.T) {
 				"a.example.com": testPrivateTarget,
 				"b.example.com": testPrivateTarget,
 			},
+			nil,
 		},
 		{
 			"example.com.",
@@ -218,6 +240,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Deleted, privateIngressHostsAB, nil},
 			},
 			map[string]string{},
+			nil,
 		},
 		{
 			"example.com.",
@@ -228,6 +251,7 @@ func TestRegistratorHandler(t *testing.T) {
 			map[string]string{
 				"c.example.com": testPublicTarget,
 			},
+			nil,
 		},
 		{
 			"example.com.",
@@ -239,6 +263,7 @@ func TestRegistratorHandler(t *testing.T) {
 			map[string]string{
 				"c.example.com": testPublicTarget,
 			},
+			nil,
 		},
 		{
 			"an.example.com.",
@@ -246,6 +271,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, privateIngressHostsAB},
 			},
 			map[string]string{},
+			nil,
 		},
 		{
 			"example.com.",
@@ -255,6 +281,7 @@ func TestRegistratorHandler(t *testing.T) {
 			map[string]string{
 				"e.example.com": testPrivateTarget,
 			},
+			nil,
 		},
 		{
 			"example.com.",
@@ -265,6 +292,7 @@ func TestRegistratorHandler(t *testing.T) {
 			map[string]string{
 				"e.example.com": testPrivateTarget,
 			},
+			nil,
 		},
 		{
 			"example.com.",
@@ -273,6 +301,7 @@ func TestRegistratorHandler(t *testing.T) {
 				{watch.Added, nil, publicIngressHostEDup},
 			},
 			map[string]string{},
+			nil,
 		},
 		{
 			"example.com.",
@@ -284,11 +313,25 @@ func TestRegistratorHandler(t *testing.T) {
 			map[string]string{
 				"e.example.com": testPublicTarget,
 			},
+			nil,
+		},
+		{
+			"example.com.",
+			[]mockEvent{
+				{watch.Added, nil, privateIngressHostE2},
+				{watch.Modified, privateIngressHostE2, privateIngressHostE2Fixed},
+			},
+			map[string]string{
+				"e.example.com":  testPrivateTarget,
+				"e2.example.com": testPrivateTarget,
+			},
+			[]interface{}{privateIngressHostE},
 		},
 	}
 
 	for i, test := range testCases {
 		r.ingressWatcher.stopChannel = make(chan struct{})
+		r.ingressWatcher.store = &mockStore{items: test.storeIngresses}
 		mdz.domain = test.domain
 		mdz.zoneData = map[string]string{}
 		r.updateQueue = make(chan cnameChange, 16)
