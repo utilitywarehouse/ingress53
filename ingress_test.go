@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
+	testcore "k8s.io/client-go/testing"
 )
 
 var (
@@ -218,8 +219,9 @@ type testIngressEvent struct {
 
 func newTestIngressWatcherClient(initial ...v1beta1.Ingress) (*fake.Clientset, *watch.FakeWatcher) {
 	client := fake.NewSimpleClientset(&v1beta1.IngressList{Items: initial})
-	watcher, _ := client.Extensions().Ingresses(v1.NamespaceDefault).Watch(v1.ListOptions{})
-	return client, watcher.(*watch.FakeWatcher)
+	watcher := watch.NewFake()
+	client.PrependWatchReactor("ingresses", testcore.DefaultWatchReactor(watcher, nil))
+	return client, watcher
 }
 
 func waitForTrue(test func() bool, timeout time.Duration) error {
