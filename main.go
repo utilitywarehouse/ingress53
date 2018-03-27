@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/utilitywarehouse/go-operational/op"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -79,12 +80,33 @@ var (
 			Help:      "number of route53 updates rejected",
 		},
 	)
+
+	// ListWatch runs every 30 seconds (approx). That means that we can allow up to 9
+	// errors on a per 5m rate of the following metric otherwise every call to kube
+	// api is failing (so rate > 0.03 => evry call to api fails)
+	metricKubernetesIOError = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "ingress53",
+			Subsystem: "kubernetes",
+			Name:      "io_error",
+			Help:      "number of errors occured while talking to kube api",
+		},
+	)
 )
+
+// UpdateKubernetesIOErrorCount: to keep count of errors while talking to kube api
+func UpdateKubernetesIOErrorCount(err error) {
+	metricKubernetesIOError.Inc()
+}
 
 func main() {
 	prometheus.MustRegister(metricUpdatesApplied)
 	prometheus.MustRegister(metricUpdatesReceived)
 	prometheus.MustRegister(metricUpdatesRejected)
+	prometheus.MustRegister(metricKubernetesIOError)
+
+	// Register KubernetesIO Error Handling
+	utilruntime.ErrorHandlers = append(utilruntime.ErrorHandlers, UpdateKubernetesIOErrorCount)
 
 	flag.Var(&targets, "target", "List of endpoints (ELB) targets to map ingress records to")
 	flag.Parse()
