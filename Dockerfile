@@ -9,7 +9,7 @@ RUN apk add --no-cache \
   && apk add --no-cache --virtual=.builddeps \
         -X http://dl-cdn.alpinelinux.org/alpine/edge/community \
         git \
-        go=1.8.4-r0 \
+        go \
         musl-dev \
   && export GOPATH=/go \
   && cd $GOPATH/src/${IMPORT_PATH} \
