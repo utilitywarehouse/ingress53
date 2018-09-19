@@ -1,4 +1,6 @@
-# ingress53
+# ingress53 - deprecated
+
+DEPRECATED in favour of https://github.com/kubernetes-incubator/external-dns
 
 ingress53 is a service designed to run in kubernetes and maintain DNS records for the cluster's ingress resources in AWS Route53.
 
